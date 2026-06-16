@@ -6,7 +6,7 @@ Paste a decklist, get cards images automatically loaded and categorized, then dr
 
 It replicates manual sorting/viewing of physical cards.
 
-![Loaded table overview](screenshots/table-overview.png)
+![Loaded table overview](screenshots/overview.png)
 
 ## Features
 
