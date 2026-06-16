@@ -19,17 +19,7 @@ A single-file Magic: The Gathering table viewer for visually sorting a deck by c
 
 ## Usage
 
-Open `index.html` in a browser, or serve the folder locally:
-
-```bash
-python -m http.server 8766
-```
-
-Then visit:
-
-```text
-http://127.0.0.1:8766/
-```
+Open `mtg-viewer.html` in a browser.
 
 Paste a decklist in this format:
 
