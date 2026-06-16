@@ -1,7 +1,8 @@
 # MTG Table Viewer
 
 A single-file Magic: The Gathering table viewer for visually sorting a deck by card type and mana value, and move them around as you wish.
-Paste a decklist, get automatic card images loading from Scryfall and categoriziation, then drag cards around on a dark tabletop while the organized columns stay readable.
+
+Paste a decklist, get cards images automatically loaded and categorized, then drag cards around on a tabletop.
 
 ![Loaded table overview](screenshots/table-overview.png)
 
@@ -9,7 +10,7 @@ Paste a decklist, get automatic card images loading from Scryfall and categorizi
 
 - Imports card images from Scryfall by card name.
 - Groups cards into creature, vehicle, spacecraft, planeswalker, enchantment/equipment/artifact, instant/ritual, other, and land areas.
-- Aligns non-land cards by mana value so MV 1 starts in the first column, MV 2 in the second, and so on.
+- Aligns non-land cards by mana value.
 - Keeps lands on the right side of the table.
 - Supports free dragging, stack snapping, and between-card insertion while preserving visible stack spacing.
 - Lets clicked cards temporarily rise to the top for inspection, then return to their stack layer when you click away.
