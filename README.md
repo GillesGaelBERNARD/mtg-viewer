@@ -4,7 +4,7 @@ A single-file Magic: The Gathering table viewer for visually sorting a deck by c
 
 Paste a decklist, get cards images automatically loaded and categorized, then drag cards around on a tabletop.
 
-Replicates manual sorting/viewing of physical cards.
+It replicates manual sorting/viewing of physical cards.
 
 ![Loaded table overview](screenshots/table-overview.png)
 
