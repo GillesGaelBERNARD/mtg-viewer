@@ -19,7 +19,7 @@ It replicates manual sorting/viewing of physical cards.
 - Includes Undo, Redo, and Reset Positions controls. Undo stores the last five moves.
 - Provides pan, zoom, fit, and center controls for large deck layouts.
 
-![Move history controls](screenshots/history-controls.png)
+![Move history controls](screenshots/zoom.png)
 
 ## Usage
 
