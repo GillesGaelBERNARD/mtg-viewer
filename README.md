@@ -1,6 +1,7 @@
 # MTG Table Viewer
 
-A single-file Magic: The Gathering table viewer for visually sorting a deck by card type and mana value. Paste a decklist, load card images from Scryfall, then drag cards around on a dark tabletop while the organized columns stay readable.
+A single-file Magic: The Gathering table viewer for visually sorting a deck by card type and mana value, and move them around as you wish.
+Paste a decklist, get automatic card images loading from Scryfall and categoriziation, then drag cards around on a dark tabletop while the organized columns stay readable.
 
 ![Loaded table overview](screenshots/table-overview.png)
 
