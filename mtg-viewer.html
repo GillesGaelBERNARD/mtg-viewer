@@ -787,8 +787,8 @@
 
       function getImageUriFromObject(card) {
         return (
-          card.image_uris?.normal ||
           card.image_uris?.large ||
+          card.image_uris?.normal ||
           card.image_uris?.png ||
           card.image_uris?.small ||
           ""
@@ -798,8 +798,8 @@
       function getImageUri(card) {
         return (
           getImageUriFromObject(card) ||
-          card.card_faces?.[0]?.image_uris?.normal ||
           card.card_faces?.[0]?.image_uris?.large ||
+          card.card_faces?.[0]?.image_uris?.normal ||
           card.card_faces?.[0]?.image_uris?.png ||
           card.card_faces?.[0]?.image_uris?.small ||
           ""

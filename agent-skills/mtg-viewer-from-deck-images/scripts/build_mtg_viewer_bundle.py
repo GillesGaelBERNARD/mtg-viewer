@@ -140,7 +140,7 @@ def save_resolve_cache(path, cache):
 
 def image_uri_from_object(card):
     images = card.get("image_uris") or {}
-    uri = images.get("normal") or images.get("large") or images.get("png") or images.get("small")
+    uri = images.get("large") or images.get("normal") or images.get("png") or images.get("small")
     return uri or ""
 
 
