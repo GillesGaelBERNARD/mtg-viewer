@@ -1,4 +1,4 @@
-# MTG Table Viewer
+# MTG Deck Table Viewer
 
 A single-file Magic: The Gathering table viewer for visually sorting a deck by card type and mana value, and move them around as you wish.
 
