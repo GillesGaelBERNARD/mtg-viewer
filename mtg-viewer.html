@@ -517,6 +517,7 @@
 
       <div class="button-row">
         <button id="load-cards" class="primary" type="button">Load Cards</button>
+        <button id="add-card" type="button">Add Card</button>
         <button id="stop-loading" type="button" disabled>Stop</button>
         <button id="clear-table" type="button">Clear</button>
       </div>
@@ -623,6 +624,7 @@
       const togglePanelButton = document.getElementById("toggle-panel");
       const decklistInput = document.getElementById("decklist");
       const loadButton = document.getElementById("load-cards");
+      const addCardButton = document.getElementById("add-card");
       const stopButton = document.getElementById("stop-loading");
       const clearButton = document.getElementById("clear-table");
       const centerButton = document.getElementById("center-table");
@@ -666,6 +668,14 @@
           .filter(Boolean);
       }
 
+      function cardDeckLine(card) {
+        return `1 ${card.requestedName || card.name}`;
+      }
+
+      function syncDecklistFromCards() {
+        decklistInput.value = state.cards.map(cardDeckLine).join("\n");
+      }
+
       function typeText(card) {
         return String(card.type_line || card.typeLine || "").toLowerCase();
       }
@@ -703,7 +713,8 @@
 
       function normalizeScryfallCard(raw, requestedName) {
         return {
-          id: raw.id || crypto.randomUUID(),
+          id: crypto.randomUUID(),
+          scryfallId: raw.id || "",
           requestedName,
           name: raw.name || requestedName,
           imageUri: getImageUri(raw),
@@ -804,20 +815,7 @@
         for (const [index, card] of state.cards.entries()) {
           setStatus("Saving", `Embedding image ${index + 1}/${state.cards.length}: ${card.name}`, state.cards.length ? index / state.cards.length : 0);
           const imageData = await getCardImageData(card);
-          cards.push({
-            id: card.id,
-            requestedName: card.requestedName,
-            name: card.name,
-            imageUri: card.imageUri && !card.imageUri.startsWith("data:") ? card.imageUri : "",
-            imageData,
-            typeLine: card.typeLine,
-            manaValue: card.manaValue,
-            category: card.category,
-            order: card.order,
-            initialOrder: card.initialOrder,
-            manualPosition: card.manualPosition ? { ...card.manualPosition } : null,
-            zIndex: card.element ? card.element.style.zIndex : ""
-          });
+          cards.push({ ...serializeBoardCard(card), imageData });
         }
 
         setStatus("Saving", "Preparing save file.", 1);
@@ -901,12 +899,20 @@
         });
       }
 
-      function normalizeImportedCard(saved, index) {
+      function uniqueCardId(preferredId, usedIds) {
+        let id = String(preferredId || crypto.randomUUID());
+        while (usedIds.has(id)) id = `${id}-${crypto.randomUUID()}`;
+        usedIds.add(id);
+        return id;
+      }
+
+      function normalizeImportedCard(saved, index, usedIds = new Set()) {
         const typeLine = String(saved.typeLine || saved.type_line || "");
         const imageData = String(saved.imageData || "");
         const imageUri = imageData || String(saved.imageUri || "");
         const card = {
-          id: String(saved.id || `imported-${crypto.randomUUID()}`),
+          id: uniqueCardId(saved.id, usedIds),
+          scryfallId: String(saved.scryfallId || ""),
           requestedName: String(saved.requestedName || saved.name || `Imported card ${index + 1}`),
           name: String(saved.name || saved.requestedName || `Imported card ${index + 1}`),
           imageUri,
@@ -914,6 +920,7 @@
           typeLine,
           manaValue: Number.isFinite(Number(saved.manaValue)) ? Math.floor(Number(saved.manaValue)) : 0,
           category: String(saved.category || categorize({ type_line: typeLine })),
+          error: String(saved.error || ""),
           order: Number.isFinite(Number(saved.order)) ? Number(saved.order) : index + 1,
           initialOrder: Number.isFinite(Number(saved.initialOrder)) ? Number(saved.initialOrder) : index + 1,
           importedZIndex: String(saved.zIndex || "")
@@ -933,7 +940,8 @@
         }
 
         state.abortController?.abort();
-        state.cards = bundle.cards.map(normalizeImportedCard);
+        const usedIds = new Set();
+        state.cards = bundle.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
         state.undoStack = [];
         state.redoStack = [];
         state.labelsHidden = Boolean(bundle.layout?.labelsHidden);
@@ -952,7 +960,7 @@
           };
         }
 
-        decklistInput.value = String(bundle.decklist || state.cards.map(card => `1 ${card.requestedName || card.name}`).join("\n"));
+        decklistInput.value = String(bundle.decklist || state.cards.map(cardDeckLine).join("\n"));
         table.querySelectorAll(".card").forEach(card => card.remove());
         hideSnapGuide();
 
@@ -963,6 +971,7 @@
           renderCardImage(card);
         }
         layoutCards();
+        syncDecklistFromCards();
         applyCamera();
         updateHistoryButtons();
         setLoading(false);
@@ -992,6 +1001,25 @@
         };
       }
 
+      function serializeBoardCard(card) {
+        return {
+          id: card.id,
+          scryfallId: card.scryfallId || "",
+          requestedName: card.requestedName,
+          name: card.name,
+          imageUri: card.imageUri && !card.imageUri.startsWith("data:") ? card.imageUri : "",
+          imageData: card.imageData || (card.imageUri?.startsWith("data:") ? card.imageUri : ""),
+          typeLine: card.typeLine,
+          manaValue: card.manaValue,
+          category: card.category,
+          error: card.error || "",
+          order: card.order,
+          initialOrder: card.initialOrder,
+          manualPosition: card.manualPosition ? { ...card.manualPosition } : null,
+          zIndex: card.element ? card.element.style.zIndex : ""
+        };
+      }
+
       function ensureCardElement(card) {
         if (card.element) return card.element;
         const element = document.createElement("article");
@@ -1012,10 +1040,16 @@
         attachCardDrag(element, card);
         element.addEventListener("contextmenu", event => {
           event.preventDefault();
+          if (!window.confirm(`Remove ${card.name} from the table?`)) return;
+          clearCardPreview();
+          const before = snapshotPositions();
           state.cards = state.cards.filter(item => item.id !== card.id);
           element.remove();
+          rememberPositionSnapshot(before);
+          syncDecklistFromCards();
           layoutCards();
-          setStatus("Removed", `${card.name} left the table.`);
+          updateHistoryButtons();
+          setStatus("Removed", `${card.name} left the table. Undo can bring it back.`);
         });
         table.appendChild(element);
         card.element = element;
@@ -1621,6 +1655,7 @@
       function setLoading(isLoading) {
         state.loading = isLoading;
         loadButton.disabled = isLoading;
+        addCardButton.disabled = isLoading;
         stopButton.disabled = !isLoading;
         updateHistoryButtons();
       }
@@ -1630,30 +1665,22 @@
           nextOrder: state.nextOrder,
           z: state.z,
           labelsHidden: state.labelsHidden,
-          cards: state.cards.map(card => ({
-            id: card.id,
-            order: card.order,
-            manualPosition: card.manualPosition ? { ...card.manualPosition } : null,
-            zIndex: card.element ? card.element.style.zIndex : ""
-          }))
+          decklist: decklistInput.value,
+          cards: state.cards.map(serializeBoardCard)
         };
       }
 
       function restorePositions(snapshot) {
         state.previewCard = null;
-        const byId = new Map(snapshot.cards.map(card => [card.id, card]));
-        for (const card of state.cards) {
-          const saved = byId.get(card.id);
-          if (!saved) continue;
-          card.order = saved.order;
-          if (saved.manualPosition) card.manualPosition = { ...saved.manualPosition };
-          else delete card.manualPosition;
-          if (card.element) {
-            card.element.style.zIndex = saved.zIndex || "";
-            if (card.manualPosition) {
-              setElementPosition(card.element, card.manualPosition.x, card.manualPosition.y);
-            }
-          }
+        table.querySelectorAll(".card").forEach(card => card.remove());
+        const usedIds = new Set();
+        state.cards = snapshot.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
+        decklistInput.value = typeof snapshot.decklist === "string" ? snapshot.decklist : state.cards.map(cardDeckLine).join("\n");
+        for (const [index, card] of state.cards.entries()) {
+          const element = ensureCardElement(card);
+          element.style.zIndex = card.importedZIndex || String(31 + index);
+          if (card.manualPosition) setElementPosition(element, card.manualPosition.x, card.manualPosition.y);
+          renderCardImage(card);
         }
         state.nextOrder = snapshot.nextOrder;
         state.z = snapshot.z;
@@ -1712,6 +1739,65 @@
         layoutCards();
         updateHistoryButtons();
         setStatus("Reset", "Positions restored to the loaded layout.");
+      }
+
+      async function addCardByName(name, recordHistory = true) {
+        const cleanName = cleanDeckLine(name || "");
+        if (!cleanName) {
+          setStatus("No card", "Enter a card name to add.");
+          return null;
+        }
+
+        clearCardPreview();
+        const before = recordHistory ? snapshotPositions() : null;
+        setLoading(true);
+        state.abortController?.abort();
+        state.abortController = new AbortController();
+        const signal = state.abortController.signal;
+        setStatus("Fetching", `Adding ${cleanName}.`, 0);
+
+        let card;
+        try {
+          card = await fetchCardByName(cleanName, signal);
+        } catch (error) {
+          if (signal.aborted) {
+            setLoading(false);
+            setStatus("Stopped", `${cleanName} was not added.`);
+            return null;
+          }
+          card = createPlaceholderCard(cleanName, error.message);
+        }
+
+        if (signal.aborted) {
+          setLoading(false);
+          setStatus("Stopped", `${cleanName} was not added.`);
+          return null;
+        }
+
+        if (!Number.isFinite(card.order)) {
+          card.order = state.nextOrder++;
+        }
+        if (!Number.isFinite(card.initialOrder)) {
+          card.initialOrder = card.order;
+        }
+        state.cards.push(card);
+        const element = ensureCardElement(card);
+        element.style.zIndex = String(++state.z);
+        layoutCards();
+        await cacheImage(card.imageUri);
+        renderCardImage(card);
+        if (recordHistory && before) rememberPositionSnapshot(before);
+        syncDecklistFromCards();
+        updateHistoryButtons();
+        setLoading(false);
+        setStatus("Added", `${card.name} joined the table. Undo can remove it again.`, 1);
+        return card;
+      }
+
+      function promptAddCard() {
+        const name = window.prompt("Card name to add");
+        if (name === null) return;
+        addCardByName(name);
       }
 
       async function loadDeck() {
@@ -1776,9 +1862,11 @@
         if (done) {
           layoutCards();
           fitLoadedCards();
+          syncDecklistFromCards();
           updateHistoryButtons();
           setStatus("Ready", `${state.cards.length} cards loaded. Images are referenced from Scryfall and cached by the browser when available.`, 1);
         } else {
+          syncDecklistFromCards();
           updateHistoryButtons();
           setStatus("Stopped", `${state.cards.length} cards placed before stopping.`, state.cards.length / names.length);
         }
@@ -1792,6 +1880,7 @@
         state.redoStack = [];
         state.labelsHidden = false;
         state.previewCard = null;
+        decklistInput.value = "";
         table.querySelectorAll(".card").forEach(card => card.remove());
         layoutCards();
         updateHistoryButtons();
@@ -1816,6 +1905,7 @@
           togglePanelButton.setAttribute("aria-label", collapsed ? "Open menu" : "Collapse menu");
         });
         loadButton.addEventListener("click", loadDeck);
+        addCardButton.addEventListener("click", promptAddCard);
         stopButton.addEventListener("click", () => state.abortController?.abort());
         clearButton.addEventListener("click", clearTable);
         centerButton.addEventListener("click", centerTable);
@@ -1867,6 +1957,7 @@
           ensureCardElement(card);
           renderCardImage(card);
         }
+        syncDecklistFromCards();
         const layout = layoutCards();
         updateHistoryButtons();
         return layout;
@@ -1894,6 +1985,7 @@
           categorize,
           computeLayout,
           loadDeck,
+          addCardByName,
           seedForTests,
           createSaveBundle,
           restoreSaveBundle,

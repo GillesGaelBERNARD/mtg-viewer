@@ -16,7 +16,9 @@ It replicates manual sorting/viewing of physical cards.
 - Keeps lands on the right side of the table.
 - Supports free dragging, stack snapping, and between-card insertion while preserving visible stack spacing.
 - Lets clicked cards temporarily rise to the top for inspection, then return to their stack layer when you click away.
-- Includes Undo, Redo, and Reset Positions controls. Undo stores the last five moves.
+- Adds individual cards without resetting the current table.
+- Asks before removing a card with right-click.
+- Includes Undo, Redo, and Reset Positions controls. Undo stores the last five changes, including add/remove actions.
 - Saves and imports `.mtg-viewer.json` bundles containing the decklist, card placement, and embedded card images.
 - Provides pan, zoom, fit, and center controls for large deck layouts.
 
@@ -39,11 +41,13 @@ The viewer loads one visual card per non-empty decklist line. Scryfall fetches a
 ## Controls
 
 - Drag a card to move it.
+- Use Add Card to append one card to the current table.
+- Right-click a card to remove it after confirmation.
 - Drop near another card to snap into that stack.
 - Hold Shift while dropping to place freely without snapping.
 - Click a card to bring it forward temporarily.
 - Click empty table space or the controls panel to return a focused card to its stack layer.
-- Use Undo, Redo, and Reset Positions to manage manual layout changes.
+- Use Undo, Redo, and Reset Positions to manage manual layout and add/remove changes.
 - Use Save / Export to write a portable table save to your device.
 - Use Import Save to reload a saved decklist, card placement, and embedded images.
 
