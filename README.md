@@ -54,3 +54,11 @@ This is a static HTML/CSS/JavaScript app. It does not require a build step or st
 Save files are plain JSON with the `.mtg-viewer.json` extension. Browsers that support the File System Access API open a save-location dialog; other browsers use their normal download flow.
 
 Card data and images are loaded from the public Scryfall API. Magic: The Gathering card names, text, and images belong to their respective rights holders.
+
+## Limitions
+
+Opinionated automated categories (equivalent to one way I layout physical cards out to visual a deck)
+
+## To Dos
+1. Add controls for categories
+2. Add diverse deck stats visualization
