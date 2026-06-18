@@ -17,6 +17,7 @@ It replicates manual sorting/viewing of physical cards.
 - Supports free dragging, stack snapping, and between-card insertion while preserving visible stack spacing.
 - Lets clicked cards temporarily rise to the top for inspection, then return to their stack layer when you click away.
 - Includes Undo, Redo, and Reset Positions controls. Undo stores the last five moves.
+- Saves and imports `.mtg-viewer.json` bundles containing the decklist, card placement, and embedded card images.
 - Provides pan, zoom, fit, and center controls for large deck layouts.
 
 ![Move history controls](screenshots/zoom.png)
@@ -43,9 +44,13 @@ The viewer loads one visual card per non-empty decklist line. Scryfall fetches a
 - Click a card to bring it forward temporarily.
 - Click empty table space or the controls panel to return a focused card to its stack layer.
 - Use Undo, Redo, and Reset Positions to manage manual layout changes.
+- Use Save / Export to write a portable table save to your device.
+- Use Import Save to reload a saved decklist, card placement, and embedded images.
 
 ## Notes
 
 This is a static HTML/CSS/JavaScript app. It does not require a build step or store deck data on a server.
+
+Save files are plain JSON with the `.mtg-viewer.json` extension. Browsers that support the File System Access API open a save-location dialog; other browsers use their normal download flow.
 
 Card data and images are loaded from the public Scryfall API. Magic: The Gathering card names, text, and images belong to their respective rights holders.

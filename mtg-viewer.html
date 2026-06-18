@@ -534,6 +534,12 @@
         <button id="reset-positions" type="button" disabled>Reset Positions</button>
       </div>
 
+      <div class="button-row">
+        <button id="save-layout" type="button" disabled>Save / Export</button>
+        <button id="import-layout" type="button">Import Save</button>
+      </div>
+      <input id="import-file" class="screen-reader-only" type="file" accept=".mtg-viewer.json,application/json">
+
       <div class="field">
         <label for="zoom-sensitivity">Zoom sensitivity <output id="zoom-value">1.00x</output></label>
         <input id="zoom-sensitivity" type="range" min="0.35" max="2.2" step="0.05" value="1">
@@ -581,6 +587,7 @@
       const STACK_CLUSTER_GAP_MM = 34;
       const MIN_FETCH_INTERVAL_MS = 1000;
       const HISTORY_LIMIT = 5;
+      const SAVE_VERSION = 1;
       const CATEGORY_ORDER = [
         { id: "creatures", label: "Creatures", test: card => hasType(card, "creature") && !hasType(card, "vehicle") && !hasType(card, "spacecraft") },
         { id: "vehicles", label: "Vehicles", test: card => hasType(card, "vehicle") },
@@ -625,6 +632,9 @@
       const undoButton = document.getElementById("undo-move");
       const redoButton = document.getElementById("redo-move");
       const resetPositionsButton = document.getElementById("reset-positions");
+      const saveLayoutButton = document.getElementById("save-layout");
+      const importLayoutButton = document.getElementById("import-layout");
+      const importFileInput = document.getElementById("import-file");
       const zoomSensitivityInput = document.getElementById("zoom-sensitivity");
       const panSensitivityInput = document.getElementById("pan-sensitivity");
       const placementDelayInput = document.getElementById("placement-delay");
@@ -750,6 +760,222 @@
           if (response.ok) await cache.put(imageUri, response.clone());
         } catch (error) {
           // Image tags can still load normally if browser cache storage is unavailable.
+        }
+      }
+
+      function blobToDataUri(blob) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.addEventListener("load", () => resolve(String(reader.result || "")));
+          reader.addEventListener("error", () => reject(reader.error || new Error("Could not read image data.")));
+          reader.readAsDataURL(blob);
+        });
+      }
+
+      async function getCardImageData(card) {
+        if (card.imageData) return card.imageData;
+        if (!card.imageUri) return "";
+        if (card.imageUri.startsWith("data:")) {
+          card.imageData = card.imageUri;
+          return card.imageData;
+        }
+        try {
+          const response = await fetch(card.imageUri, { mode: "cors" });
+          if (!response.ok) throw new Error(`Image fetch failed: ${response.status}`);
+          card.imageData = await blobToDataUri(await response.blob());
+          return card.imageData;
+        } catch (error) {
+          return "";
+        }
+      }
+
+      function makeBundleFilename() {
+        const firstName = state.cards[0]?.name || "deck";
+        const safeName = firstName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 42) || "deck";
+        return `${safeName}-mtg-viewer.mtg-viewer.json`;
+      }
+
+      async function createSaveBundle() {
+        const cards = [];
+        for (const [index, card] of state.cards.entries()) {
+          setStatus("Saving", `Embedding image ${index + 1}/${state.cards.length}: ${card.name}`, state.cards.length ? index / state.cards.length : 0);
+          const imageData = await getCardImageData(card);
+          cards.push({
+            id: card.id,
+            requestedName: card.requestedName,
+            name: card.name,
+            imageUri: card.imageUri && !card.imageUri.startsWith("data:") ? card.imageUri : "",
+            imageData,
+            typeLine: card.typeLine,
+            manaValue: card.manaValue,
+            category: card.category,
+            order: card.order,
+            initialOrder: card.initialOrder,
+            manualPosition: card.manualPosition ? { ...card.manualPosition } : null,
+            zIndex: card.element ? card.element.style.zIndex : ""
+          });
+        }
+
+        setStatus("Saving", "Preparing save file.", 1);
+        return {
+          app: "mtg-table-viewer",
+          version: SAVE_VERSION,
+          savedAt: new Date().toISOString(),
+          decklist: decklistInput.value,
+          layout: {
+            nextOrder: state.nextOrder,
+            z: state.z,
+            labelsHidden: state.labelsHidden,
+            camera: { ...state.camera }
+          },
+          cards
+        };
+      }
+
+      async function writeBundleFile(bundle) {
+        const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
+        const suggestedName = makeBundleFilename();
+        if ("showSaveFilePicker" in window) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName,
+            types: [{
+              description: "MTG Viewer save",
+              accept: { "application/json": [".mtg-viewer.json", ".json"] }
+            }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return;
+        }
+
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = suggestedName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1200);
+      }
+
+      async function saveLayoutBundle() {
+        if (!state.cards.length) {
+          setStatus("Nothing to save", "Load cards before exporting a table save.");
+          return;
+        }
+        clearCardPreview();
+        saveLayoutButton.disabled = true;
+        importLayoutButton.disabled = true;
+        try {
+          const bundle = await createSaveBundle();
+          await writeBundleFile(bundle);
+          setStatus("Saved", `Exported ${bundle.cards.length} cards with decklist, positions, and embedded images.`, 1);
+        } catch (error) {
+          if (error?.name === "AbortError") {
+            setStatus("Save cancelled", "No file was written.");
+          } else {
+            setStatus("Save failed", error.message || "Could not export this table.");
+          }
+        } finally {
+          updateHistoryButtons();
+        }
+      }
+
+      function readJsonFile(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.addEventListener("load", () => {
+            try {
+              resolve(JSON.parse(String(reader.result || "{}")));
+            } catch (error) {
+              reject(new Error("The selected file is not valid JSON."));
+            }
+          });
+          reader.addEventListener("error", () => reject(reader.error || new Error("Could not read the selected file.")));
+          reader.readAsText(file);
+        });
+      }
+
+      function normalizeImportedCard(saved, index) {
+        const typeLine = String(saved.typeLine || saved.type_line || "");
+        const imageData = String(saved.imageData || "");
+        const imageUri = imageData || String(saved.imageUri || "");
+        const card = {
+          id: String(saved.id || `imported-${crypto.randomUUID()}`),
+          requestedName: String(saved.requestedName || saved.name || `Imported card ${index + 1}`),
+          name: String(saved.name || saved.requestedName || `Imported card ${index + 1}`),
+          imageUri,
+          imageData,
+          typeLine,
+          manaValue: Number.isFinite(Number(saved.manaValue)) ? Math.floor(Number(saved.manaValue)) : 0,
+          category: String(saved.category || categorize({ type_line: typeLine })),
+          order: Number.isFinite(Number(saved.order)) ? Number(saved.order) : index + 1,
+          initialOrder: Number.isFinite(Number(saved.initialOrder)) ? Number(saved.initialOrder) : index + 1,
+          importedZIndex: String(saved.zIndex || "")
+        };
+        if (saved.manualPosition && Number.isFinite(Number(saved.manualPosition.x)) && Number.isFinite(Number(saved.manualPosition.y))) {
+          card.manualPosition = {
+            x: Number(saved.manualPosition.x),
+            y: Number(saved.manualPosition.y)
+          };
+        }
+        return card;
+      }
+
+      function restoreSaveBundle(bundle) {
+        if (bundle?.app !== "mtg-table-viewer" || !Array.isArray(bundle.cards)) {
+          throw new Error("This is not an MTG Table Viewer save file.");
+        }
+
+        state.abortController?.abort();
+        state.cards = bundle.cards.map(normalizeImportedCard);
+        state.undoStack = [];
+        state.redoStack = [];
+        state.labelsHidden = Boolean(bundle.layout?.labelsHidden);
+        state.previewCard = null;
+        state.nextOrder = Number.isFinite(Number(bundle.layout?.nextOrder))
+          ? Number(bundle.layout.nextOrder)
+          : Math.max(1, ...state.cards.map(card => Number(card.order) || 0)) + 1;
+        state.z = Number.isFinite(Number(bundle.layout?.z))
+          ? Number(bundle.layout.z)
+          : Math.max(30, ...state.cards.map(card => Number(card.importedZIndex) || 30));
+        if (bundle.layout?.camera) {
+          state.camera = {
+            x: Number.isFinite(Number(bundle.layout.camera.x)) ? Number(bundle.layout.camera.x) : state.camera.x,
+            y: Number.isFinite(Number(bundle.layout.camera.y)) ? Number(bundle.layout.camera.y) : state.camera.y,
+            scale: Number.isFinite(Number(bundle.layout.camera.scale)) ? Number(bundle.layout.camera.scale) : state.camera.scale
+          };
+        }
+
+        decklistInput.value = String(bundle.decklist || state.cards.map(card => `1 ${card.requestedName || card.name}`).join("\n"));
+        table.querySelectorAll(".card").forEach(card => card.remove());
+        hideSnapGuide();
+
+        for (const [index, card] of state.cards.entries()) {
+          const element = ensureCardElement(card);
+          element.style.zIndex = card.importedZIndex || String(31 + index);
+          if (card.manualPosition) setElementPosition(element, card.manualPosition.x, card.manualPosition.y);
+          renderCardImage(card);
+        }
+        layoutCards();
+        applyCamera();
+        updateHistoryButtons();
+        setLoading(false);
+        setStatus("Imported", `Loaded ${state.cards.length} saved cards with decklist, positions, and images.`, 1);
+      }
+
+      async function importLayoutBundle(file) {
+        if (!file) return;
+        try {
+          const bundle = await readJsonFile(file);
+          restoreSaveBundle(bundle);
+        } catch (error) {
+          setStatus("Import failed", error.message || "Could not import this save.");
         }
       }
 
@@ -1396,6 +1622,7 @@
         state.loading = isLoading;
         loadButton.disabled = isLoading;
         stopButton.disabled = !isLoading;
+        updateHistoryButtons();
       }
 
       function snapshotPositions() {
@@ -1447,6 +1674,8 @@
         undoButton.disabled = state.undoStack.length === 0;
         redoButton.disabled = state.redoStack.length === 0;
         resetPositionsButton.disabled = !state.cards.some(card => card.manualPosition) && !state.labelsHidden;
+        saveLayoutButton.disabled = state.loading || !state.cards.length;
+        importLayoutButton.disabled = state.loading;
       }
 
       function undoMove() {
@@ -1596,6 +1825,13 @@
         undoButton.addEventListener("click", undoMove);
         redoButton.addEventListener("click", redoMove);
         resetPositionsButton.addEventListener("click", resetPositions);
+        saveLayoutButton.addEventListener("click", saveLayoutBundle);
+        importLayoutButton.addEventListener("click", () => importFileInput.click());
+        importFileInput.addEventListener("change", () => {
+          const [file] = importFileInput.files || [];
+          importLayoutBundle(file);
+          importFileInput.value = "";
+        });
         document.addEventListener("pointerdown", event => {
           if (!state.previewCard || event.target.closest(".card")) return;
           clearCardPreview(true);
@@ -1631,7 +1867,9 @@
           ensureCardElement(card);
           renderCardImage(card);
         }
-        return layoutCards();
+        const layout = layoutCards();
+        updateHistoryButtons();
+        return layout;
       }
 
       function init() {
@@ -1657,6 +1895,8 @@
           computeLayout,
           loadDeck,
           seedForTests,
+          createSaveBundle,
+          restoreSaveBundle,
           state,
           constants: {
             CARD_MM,
