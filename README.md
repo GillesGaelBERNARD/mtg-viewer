@@ -1,5 +1,7 @@
 # MTG Deck Table Viewer
 
+Version: v0.1
+
 A single-file Magic: The Gathering table viewer for visually sorting a deck by card type and mana value, and move them around as you wish.
 
 Paste a decklist, get cards images automatically loaded and categorized, then drag cards around on a tabletop.
