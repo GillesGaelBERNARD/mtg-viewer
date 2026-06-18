@@ -218,6 +218,12 @@
       outline: none;
     }
 
+    .card.is-dragging .face-toggle,
+    .card.is-previewing .face-toggle {
+      opacity: 0;
+      pointer-events: none;
+    }
+
     .card.is-loading .image-shell {
       position: absolute;
       inset: 0;
@@ -1691,6 +1697,7 @@
         const card = state.cards.find(item => item.id === state.previewCard.cardId);
         if (card?.element) {
           card.element.style.zIndex = state.previewCard.zIndex;
+          card.element.classList.remove("is-previewing");
         }
         state.previewCard = null;
         if (announce) setStatus("Restored", "Card returned to its stack layer.");
@@ -1706,10 +1713,13 @@
             zIndex: element.style.zIndex || ""
           };
         }
+        element.classList.add("is-previewing");
         element.style.zIndex = String(++state.z);
       }
 
       function commitCardPreview() {
+        const card = state.cards.find(item => item.id === state.previewCard?.cardId);
+        if (card?.element) card.element.classList.remove("is-previewing");
         state.previewCard = null;
       }
 
