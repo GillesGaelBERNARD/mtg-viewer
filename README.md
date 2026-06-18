@@ -64,5 +64,6 @@ Card data and images are loaded from the public Scryfall API. Magic: The Gatheri
 Opinionated automated categories (equivalent to one way I layout physical cards out to visualize a deck)
 
 ## To Dos
-1. Add controls for categories
-2. Add diverse deck stats visualization
+1. Dontrols for categories
+2. Diverse deck stats visualization
+3. Automated land sorting
