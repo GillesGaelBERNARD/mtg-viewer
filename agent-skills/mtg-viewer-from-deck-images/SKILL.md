@@ -57,7 +57,7 @@ Choose image URI in this order:
 
 Treat Scryfall `image_status` values `placeholder` and `missing` as unavailable. If the local-language image is unavailable, use the available English image with no warning.
 
-Within the chosen print, use `large`, then `normal`, then `png`, then `small`; `large` is readable without PNG-level file size.
+Within the chosen print, use `normal`, then `large`, then `png`, then `small`; clean zoom rendering makes `normal` readable without `large` file size.
 
 For cards with separate Scryfall face images, export `faces[]`, `activeFaceIndex: 0`, and all face image URLs/data. If a split/adventure card has only a top-level image, export that single image.
 
