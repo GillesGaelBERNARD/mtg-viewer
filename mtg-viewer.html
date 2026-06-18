@@ -679,7 +679,8 @@
         zoomSensitivity: 1,
         panSensitivity: 1,
         placementDelay: 140,
-        bounds: null
+        bounds: null,
+        snapAnchors: []
       };
 
       const viewport = document.getElementById("viewport");
@@ -1559,19 +1560,32 @@
         return LEFT_MM + column * columnStepMm();
       }
 
-      function measureCategoryHeight(cards) {
+      function visualColumnIndex(card, firstManaValue = 1) {
+        if (card.manualPosition && Number.isFinite(Number(card.manualPosition.x))) {
+          return Math.max(0, Math.round((Number(card.manualPosition.x) - LEFT_MM) / columnStepMm()));
+        }
+        const manaValue = Number(card.manaValue);
+        return Math.max(0, Math.floor(Number.isFinite(manaValue) ? manaValue : 0) - firstManaValue);
+      }
+
+      function measureCategoryHeight(cards, firstManaValue = 1, categoryTopY = TOP_MM) {
         if (!cards.length) return 0;
         const columns = new Map();
+        let maxManualExtent = 0;
         for (const card of cards) {
-          const key = String(card.manaValue);
+          const key = String(visualColumnIndex(card, firstManaValue));
           if (!columns.has(key)) columns.set(key, []);
           columns.get(key).push(card);
+          if (card.manualPosition && Number.isFinite(Number(card.manualPosition.y))) {
+            maxManualExtent = Math.max(maxManualExtent, Number(card.manualPosition.y) - categoryTopY + CARD_MM.height);
+          }
         }
         let tallestStack = 1;
         for (const stack of columns.values()) {
           tallestStack = Math.max(tallestStack, stack.length);
         }
-        return CARD_MM.height + ((tallestStack - 1) * STACK_OFFSET_MM) + ROW_GAP_MM;
+        const stackedHeight = CARD_MM.height + ((tallestStack - 1) * STACK_OFFSET_MM);
+        return Math.max(stackedHeight, maxManualExtent) + ROW_GAP_MM;
       }
 
       function getLayoutManaValues(cards) {
@@ -1593,6 +1607,7 @@
         const positions = new Map();
         const labels = [];
         const manaLabels = [];
+        const snapAnchors = [];
         let y = TOP_MM;
         let minX = LEFT_MM;
         let maxX = LEFT_MM + CARD_MM.width;
@@ -1609,11 +1624,23 @@
             if (!columns.has(key)) columns.set(key, []);
             columns.get(key).push(card);
           }
+          const visualColumns = new Map();
+          for (const card of structureGroup) {
+            const key = visualColumnIndex(card, firstManaValue);
+            visualColumns.set(key, (visualColumns.get(key) || 0) + 1);
+          }
           labels.push({ id: category.id, label: category.label, count: structureGroup.length, x: LEFT_MM, y: y - 28 });
 
           for (const manaValue of layoutManaValues) {
             const x = manaColumnX(manaValue, firstManaValue);
             manaLabels.push({ category: category.id, value: manaValue, x, y: y - 10 });
+            snapAnchors.push({
+              category: category.id,
+              value: manaValue,
+              x,
+              y,
+              empty: !visualColumns.get(Math.max(0, Math.floor(manaValue) - firstManaValue))
+            });
             minX = Math.min(minX, x);
             maxX = Math.max(maxX, x + CARD_MM.width);
             nonLandMaxX = Math.max(nonLandMaxX, x + CARD_MM.width);
@@ -1625,7 +1652,7 @@
             });
           }
 
-          y += Math.max(CARD_MM.height + ROW_GAP_MM, measureCategoryHeight(structureGroup)) + CATEGORY_GAP_MM;
+          y += Math.max(CARD_MM.height + ROW_GAP_MM, measureCategoryHeight(structureGroup, firstManaValue, y)) + CATEGORY_GAP_MM;
         }
 
         const lands = groups.get("lands") || [];
@@ -1647,6 +1674,7 @@
           positions,
           labels,
           manaLabels,
+          snapAnchors,
           landLeft,
           bounds: {
             x: minX,
@@ -1661,6 +1689,7 @@
         const autoCards = state.cards.filter(card => !card.manualPosition);
         const layout = computeLayout(autoCards, state.cards);
         state.bounds = expandBoundsWithManualCards(layout.bounds);
+        state.snapAnchors = layout.snapAnchors || [];
         renderLabels(layout.labels, layout.manaLabels);
 
         for (const card of state.cards) {
@@ -1812,6 +1841,31 @@
         return readElementPosition(card.element) || card.manualPosition || null;
       }
 
+      function findBaseAnchorCandidate(card, probeX, probeY) {
+        let best = null;
+        for (const anchor of state.snapAnchors || []) {
+          if (!anchor.empty) continue;
+          const dx = Math.abs(probeX - (anchor.x + CARD_MM.width / 2));
+          const dy = Math.abs(probeY - (anchor.y + CARD_MM.height / 2));
+          if (dx > SNAP_X_MM || dy > CARD_MM.height / 2 + SNAP_Y_PAD_MM) continue;
+          const xScore = dx / SNAP_X_MM;
+          const yScore = dy / Math.max(CARD_MM.height / 2, SNAP_Y_PAD_MM);
+          const score = xScore + yScore * 0.55;
+          if (!best || score < best.score) {
+            best = {
+              x: anchor.x,
+              y: anchor.y,
+              index: 0,
+              baseY: anchor.y,
+              canonicalColumn: anchor.category === card.category && anchor.value === card.manaValue,
+              score,
+              stack: []
+            };
+          }
+        }
+        return best;
+      }
+
       function findSnapCandidate(card, x, y, shiftKey) {
         if (shiftKey) return null;
         const probeX = x + CARD_MM.width / 2;
@@ -1820,8 +1874,8 @@
           .filter(other => canUseSnapAnchor(card, other))
           .map(other => ({ card: other, position: getLiveCardPosition(other) }))
           .filter(entry => entry.position);
-        if (!entries.length) return null;
 
+        let stackCandidate = null;
         let nearest = null;
         for (const entry of entries) {
           const xScore = Math.abs(probeX - (entry.position.x + CARD_MM.width / 2)) / SNAP_X_MM;
@@ -1829,55 +1883,63 @@
           const score = xScore + yScore * 0.55;
           if (!nearest || score < nearest.score) nearest = { ...entry, score };
         }
-        if (!nearest || Math.abs(probeX - (nearest.position.x + CARD_MM.width / 2)) > SNAP_X_MM) return null;
+        if (nearest && Math.abs(probeX - (nearest.position.x + CARD_MM.width / 2)) <= SNAP_X_MM) {
+          const sameColumnEntries = entries
+            .filter(entry => Math.abs(entry.position.x - nearest.position.x) <= SNAP_X_MM)
+            .sort((a, b) => a.position.y - b.position.y || getSortOrder(a.card) - getSortOrder(b.card) || a.card.name.localeCompare(b.card.name));
+          const nearestIndex = sameColumnEntries.findIndex(entry => entry.card.id === nearest.card.id);
 
-        const sameColumnEntries = entries
-          .filter(entry => Math.abs(entry.position.x - nearest.position.x) <= SNAP_X_MM)
-          .sort((a, b) => a.position.y - b.position.y || getSortOrder(a.card) - getSortOrder(b.card) || a.card.name.localeCompare(b.card.name));
-        const nearestIndex = sameColumnEntries.findIndex(entry => entry.card.id === nearest.card.id);
-        if (nearestIndex < 0) return null;
+          if (nearestIndex >= 0) {
+            let startIndex = nearestIndex;
+            while (
+              startIndex > 0 &&
+              sameColumnEntries[startIndex].position.y - sameColumnEntries[startIndex - 1].position.y <= STACK_CLUSTER_GAP_MM
+            ) {
+              startIndex--;
+            }
 
-        let startIndex = nearestIndex;
-        while (
-          startIndex > 0 &&
-          sameColumnEntries[startIndex].position.y - sameColumnEntries[startIndex - 1].position.y <= STACK_CLUSTER_GAP_MM
-        ) {
-          startIndex--;
+            let endIndex = nearestIndex;
+            while (
+              endIndex < sameColumnEntries.length - 1 &&
+              sameColumnEntries[endIndex + 1].position.y - sameColumnEntries[endIndex].position.y <= STACK_CLUSTER_GAP_MM
+            ) {
+              endIndex++;
+            }
+
+            const stackEntries = sameColumnEntries.slice(startIndex, endIndex + 1);
+            if (stackEntries.length) {
+              const firstPosition = stackEntries[0].position;
+              const lastPosition = stackEntries[stackEntries.length - 1].position;
+              const minY = firstPosition.y - SNAP_Y_PAD_MM;
+              const maxY = lastPosition.y + CARD_MM.height + SNAP_Y_PAD_MM;
+              if (probeY >= minY && probeY <= maxY) {
+                const stackX = stackEntries.reduce((sum, entry) => sum + entry.position.x, 0) / stackEntries.length;
+                const baseY = firstPosition.y;
+                const index = clamp(Math.round((probeY - baseY - CARD_MM.height / 2) / STACK_OFFSET_MM), 0, stackEntries.length);
+                const canonicalColumn = stackEntries.every(entry =>
+                  !entry.card.manualPosition &&
+                  entry.card.category === card.category &&
+                  entry.card.manaValue === card.manaValue
+                );
+                stackCandidate = {
+                  x: stackX,
+                  y: baseY + index * STACK_OFFSET_MM,
+                  index,
+                  baseY,
+                  canonicalColumn,
+                  score: nearest.score,
+                  stack: stackEntries.map(entry => entry.card)
+                };
+              }
+            }
+          }
         }
 
-        let endIndex = nearestIndex;
-        while (
-          endIndex < sameColumnEntries.length - 1 &&
-          sameColumnEntries[endIndex + 1].position.y - sameColumnEntries[endIndex].position.y <= STACK_CLUSTER_GAP_MM
-        ) {
-          endIndex++;
+        const baseAnchorCandidate = findBaseAnchorCandidate(card, probeX, probeY);
+        if (stackCandidate && baseAnchorCandidate) {
+          return stackCandidate.score <= baseAnchorCandidate.score ? stackCandidate : baseAnchorCandidate;
         }
-
-        const stackEntries = sameColumnEntries.slice(startIndex, endIndex + 1);
-        if (!stackEntries.length) return null;
-
-        const firstPosition = stackEntries[0].position;
-        const lastPosition = stackEntries[stackEntries.length - 1].position;
-        const minY = firstPosition.y - SNAP_Y_PAD_MM;
-        const maxY = lastPosition.y + CARD_MM.height + SNAP_Y_PAD_MM;
-        if (probeY < minY || probeY > maxY) return null;
-
-        const stackX = stackEntries.reduce((sum, entry) => sum + entry.position.x, 0) / stackEntries.length;
-        const baseY = firstPosition.y;
-        const index = clamp(Math.round((probeY - baseY - CARD_MM.height / 2) / STACK_OFFSET_MM), 0, stackEntries.length);
-        const canonicalColumn = stackEntries.every(entry =>
-          !entry.card.manualPosition &&
-          entry.card.category === card.category &&
-          entry.card.manaValue === card.manaValue
-        );
-        return {
-          x: stackX,
-          y: baseY + index * STACK_OFFSET_MM,
-          index,
-          baseY,
-          canonicalColumn,
-          stack: stackEntries.map(entry => entry.card)
-        };
+        return stackCandidate || baseAnchorCandidate;
       }
 
       function applySnap(card, candidate) {
