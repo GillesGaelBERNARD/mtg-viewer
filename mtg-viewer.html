@@ -712,12 +712,14 @@
       }
 
       function normalizeScryfallCard(raw, requestedName) {
+        const imageUri = getImageUri(raw);
         return {
           id: crypto.randomUUID(),
           scryfallId: raw.id || "",
           requestedName,
           name: raw.name || requestedName,
-          imageUri: getImageUri(raw),
+          imageUri,
+          sourceImageUri: imageUri,
           typeLine: raw.type_line || "",
           manaValue: getManaValue(raw),
           category: categorize(raw),
@@ -810,11 +812,18 @@
         return `${safeName}-mtg-viewer.mtg-viewer.json`;
       }
 
-      async function createSaveBundle() {
+      async function createSaveBundle(options = {}) {
+        const embedImages = options.embedImages !== false;
         const cards = [];
         for (const [index, card] of state.cards.entries()) {
-          setStatus("Saving", `Embedding image ${index + 1}/${state.cards.length}: ${card.name}`, state.cards.length ? index / state.cards.length : 0);
-          const imageData = await getCardImageData(card);
+          setStatus(
+            "Saving",
+            embedImages
+              ? `Embedding image ${index + 1}/${state.cards.length}: ${card.name}`
+              : `Saving card ${index + 1}/${state.cards.length}: ${card.name}`,
+            state.cards.length ? index / state.cards.length : 0
+          );
+          const imageData = embedImages ? await getCardImageData(card) : "";
           cards.push({ ...serializeBoardCard(card), imageData });
         }
 
@@ -823,6 +832,7 @@
           app: "mtg-table-viewer",
           version: SAVE_VERSION,
           savedAt: new Date().toISOString(),
+          offlineImages: embedImages,
           decklist: decklistInput.value,
           layout: {
             nextOrder: state.nextOrder,
@@ -870,9 +880,16 @@
         saveLayoutButton.disabled = true;
         importLayoutButton.disabled = true;
         try {
-          const bundle = await createSaveBundle();
+          const embedImages = window.confirm("Save card images inside the file for offline imports?\n\nOK: include images, larger file.\nCancel: save URLs only, smaller file.");
+          const bundle = await createSaveBundle({ embedImages });
           await writeBundleFile(bundle);
-          setStatus("Saved", `Exported ${bundle.cards.length} cards with decklist, positions, and embedded images.`, 1);
+          setStatus(
+            "Saved",
+            embedImages
+              ? `Exported ${bundle.cards.length} cards with decklist, positions, URLs, and embedded images.`
+              : `Exported ${bundle.cards.length} cards with decklist, positions, and image URLs.`,
+            1
+          );
         } catch (error) {
           if (error?.name === "AbortError") {
             setStatus("Save cancelled", "No file was written.");
@@ -909,13 +926,15 @@
       function normalizeImportedCard(saved, index, usedIds = new Set()) {
         const typeLine = String(saved.typeLine || saved.type_line || "");
         const imageData = String(saved.imageData || "");
-        const imageUri = imageData || String(saved.imageUri || "");
+        const sourceImageUri = String(saved.imageUri || "");
+        const imageUri = imageData || sourceImageUri;
         const card = {
           id: uniqueCardId(saved.id, usedIds),
           scryfallId: String(saved.scryfallId || ""),
           requestedName: String(saved.requestedName || saved.name || `Imported card ${index + 1}`),
           name: String(saved.name || saved.requestedName || `Imported card ${index + 1}`),
           imageUri,
+          sourceImageUri,
           imageData,
           typeLine,
           manaValue: Number.isFinite(Number(saved.manaValue)) ? Math.floor(Number(saved.manaValue)) : 0,
@@ -1007,7 +1026,7 @@
           scryfallId: card.scryfallId || "",
           requestedName: card.requestedName,
           name: card.name,
-          imageUri: card.imageUri && !card.imageUri.startsWith("data:") ? card.imageUri : "",
+          imageUri: card.sourceImageUri || (card.imageUri && !card.imageUri.startsWith("data:") ? card.imageUri : ""),
           imageData: card.imageData || (card.imageUri?.startsWith("data:") ? card.imageUri : ""),
           typeLine: card.typeLine,
           manaValue: card.manaValue,
@@ -1941,6 +1960,7 @@
           requestedName: card.name,
           name: card.name,
           imageUri: card.imageUri || "",
+          sourceImageUri: card.sourceImageUri || (card.imageUri && !String(card.imageUri).startsWith("data:") ? card.imageUri : ""),
           typeLine: card.typeLine || card.type_line || "",
           manaValue: getManaValue(card),
           category: categorize(card),

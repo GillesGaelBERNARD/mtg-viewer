@@ -19,7 +19,7 @@ It replicates manual sorting/viewing of physical cards.
 - Adds individual cards without resetting the current table.
 - Asks before removing a card with right-click.
 - Includes Undo, Redo, and Reset Positions controls. Undo stores the last five changes, including add/remove actions.
-- Saves and imports `.mtg-viewer.json` bundles containing the decklist, card placement, and embedded card images.
+- Saves and imports `.mtg-viewer.json` bundles containing the decklist, card placement, and Scryfall image URLs, with optional embedded images for offline use.
 - Provides pan, zoom, fit, and center controls for large deck layouts.
 
 ![Move history controls](screenshots/zoom.png)
@@ -48,14 +48,14 @@ The viewer loads one visual card per non-empty decklist line. Scryfall fetches a
 - Click a card to bring it forward temporarily.
 - Click empty table space or the controls panel to return a focused card to its stack layer.
 - Use Undo, Redo, and Reset Positions to manage manual layout and add/remove changes.
-- Use Save / Export to write a portable table save to your device.
-- Use Import Save to reload a saved decklist, card placement, and embedded images.
+- Use Save / Export to write a portable table save to your device. Choose whether to embed images for offline imports.
+- Use Import Save to reload a saved decklist, card placement, and either embedded images or Scryfall image URLs.
 
 ## Notes
 
 This is a static HTML/CSS/JavaScript app. It does not require a build step or store deck data on a server.
 
-Save files are plain JSON with the `.mtg-viewer.json` extension. Browsers that support the File System Access API open a save-location dialog; other browsers use their normal download flow.
+Save files are plain JSON with the `.mtg-viewer.json` extension. Browsers that support the File System Access API open a save-location dialog; other browsers use their normal download flow. Saves always keep image URLs; embedding images makes the file larger but lets imports show cards offline.
 
 Card data and images are loaded from the public Scryfall API. Magic: The Gathering card names, text, and images belong to their respective rights holders.
 
