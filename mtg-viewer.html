@@ -872,8 +872,21 @@
         return CARD_MM.height + ((tallestStack - 1) * STACK_OFFSET_MM) + ROW_GAP_MM;
       }
 
-      function computeLayout(cards) {
+      function getLayoutManaValues(cards) {
+        const manaValues = cards
+          .filter(card => card.category !== "lands")
+          .map(card => Number(card.manaValue))
+          .filter(Number.isFinite);
+        if (!manaValues.length) return [];
+        const maxValue = Math.max(1, ...manaValues.map(value => Math.max(0, Math.floor(value))));
+        const minValue = manaValues.some(value => value <= 0) ? 0 : 1;
+        return Array.from({ length: maxValue - minValue + 1 }, (_, index) => minValue + index);
+      }
+
+      function computeLayout(cards, structureCards = cards) {
         const groups = groupCards(cards);
+        const structureGroups = groupCards(structureCards);
+        const layoutManaValues = getLayoutManaValues(structureCards);
         const positions = new Map();
         const labels = [];
         const manaLabels = [];
@@ -885,25 +898,26 @@
 
         for (const category of CATEGORY_ORDER) {
           const group = groups.get(category.id) || [];
-          if (!group.length) continue;
+          const structureGroup = structureGroups.get(category.id) || [];
+          if (!structureGroup.length) continue;
           const columns = new Map();
           for (const card of group) {
             const key = card.manaValue;
             if (!columns.has(key)) columns.set(key, []);
             columns.get(key).push(card);
           }
-          const sortedManaValues = [...columns.keys()].sort((a, b) => a - b);
-          labels.push({ id: category.id, label: category.label, count: group.length, x: LEFT_MM, y: y - 28 });
+          labels.push({ id: category.id, label: category.label, count: structureGroup.length, x: LEFT_MM, y: y - 28 });
 
-          for (const manaValue of sortedManaValues) {
-            const stack = columns.get(manaValue).sort((a, b) => getSortOrder(a) - getSortOrder(b) || a.name.localeCompare(b.name));
+          for (const manaValue of layoutManaValues) {
             const x = manaColumnX(manaValue);
             manaLabels.push({ category: category.id, value: manaValue, x, y: y - 10 });
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x + CARD_MM.width);
+            nonLandMaxX = Math.max(nonLandMaxX, x + CARD_MM.width);
+
+            const stack = (columns.get(manaValue) || []).sort((a, b) => getSortOrder(a) - getSortOrder(b) || a.name.localeCompare(b.name));
             stack.forEach((card, stackIndex) => {
               positions.set(card.id, { x, y: y + stackIndex * STACK_OFFSET_MM, lane: category.id });
-              minX = Math.min(minX, x);
-              maxX = Math.max(maxX, x + CARD_MM.width);
-              nonLandMaxX = Math.max(nonLandMaxX, x + CARD_MM.width);
               maxY = Math.max(maxY, y + stackIndex * STACK_OFFSET_MM + CARD_MM.height);
             });
           }
@@ -942,10 +956,9 @@
 
       function layoutCards() {
         const autoCards = state.cards.filter(card => !card.manualPosition);
-        const layout = computeLayout(autoCards);
+        const layout = computeLayout(autoCards, state.cards);
         state.bounds = expandBoundsWithManualCards(layout.bounds);
-        const hasManualPlacement = state.cards.some(card => card.manualPosition);
-        renderLabels(layout.labels, (hasManualPlacement || state.labelsHidden) ? [] : layout.manaLabels);
+        renderLabels(layout.labels, layout.manaLabels);
 
         for (const card of state.cards) {
           const element = ensureCardElement(card);
