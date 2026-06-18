@@ -71,6 +71,6 @@ The repo also includes a separate Codex skill at `agent-skills/mtg-viewer-from-d
 Opinionated automated categories (equivalent to one way I layout physical cards out to visualize a deck)
 
 ## To Dos
-1. Dontrols for categories
+1. Controls for categories
 2. Diverse deck stats visualization
 3. Automated land sorting
