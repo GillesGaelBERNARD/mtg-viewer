@@ -174,6 +174,10 @@
       transform: scale(1.012);
     }
 
+    #table.is-camera-redrawing .card {
+      transition: none !important;
+    }
+
     .snap-guide {
       position: absolute;
       width: var(--scaled-card-w);
@@ -2049,8 +2053,7 @@
         state.camera.x = screenX - worldX * nextScale;
         state.camera.y = screenY - worldY * nextScale;
         state.camera.scale = nextScale;
-        applyCamera();
-        layoutCards();
+        redrawCameraLayout();
       }
 
       function applyCamera() {
@@ -2063,6 +2066,19 @@
         table.style.setProperty("--scaled-mana-font", `${12 * scale}px`);
         table.style.setProperty("--scaled-card-radius", `${8 * scale}px`);
         table.style.transform = `translate(${state.camera.x}px, ${state.camera.y}px)`;
+      }
+
+      let cameraRedrawTimer = 0;
+
+      function redrawCameraLayout() {
+        table.classList.add("is-camera-redrawing");
+        applyCamera();
+        layoutCards();
+        window.clearTimeout(cameraRedrawTimer);
+        cameraRedrawTimer = window.setTimeout(() => {
+          table.classList.remove("is-camera-redrawing");
+          cameraRedrawTimer = 0;
+        }, 90);
       }
 
       function centerTable() {
@@ -2092,8 +2108,7 @@
         state.camera.scale = scale;
         state.camera.x = Math.round((window.innerWidth - bounds.width * scale) / 2 - bounds.x * scale);
         state.camera.y = Math.round((window.innerHeight - bounds.height * scale) / 2 - bounds.y * scale);
-        applyCamera();
-        layoutCards();
+        redrawCameraLayout();
       }
 
       function clamp(value, min, max) {
