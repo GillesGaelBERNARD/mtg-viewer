@@ -38,7 +38,7 @@ Create a viewer save, not just a decklist. Read every physical card visible or i
      - `1 Anneau solaire | lang=fr | name=Sol Ring`
      - `4 Forest`
    - Prefer `name=` when a localized title is hard to resolve or several cards share words.
-   - Use `--embed-images` when the user wants offline import or when quality matters; this embeds every available card face.
+   - Use `--embed-images` when the user wants offline import or when quality matters; this embeds every available non-placeholder card face.
    - Use a clear deck title and save next to the source deck images unless the user gave another destination.
 
 5. Verify output.
@@ -54,6 +54,8 @@ Choose image URI in this order:
 2. Same-language print with same oracle identity when input used English canonical `name=`.
 3. Original Scryfall result language.
 4. English default only when same-language art is unavailable.
+
+Treat Scryfall `image_status` values `placeholder` and `missing` as unavailable. If the local-language image is unavailable, use the available English image with no warning.
 
 For cards with separate Scryfall face images, export `faces[]`, `activeFaceIndex: 0`, and all face image URLs/data. If a split/adventure card has only a top-level image, export that single image.
 

@@ -12,6 +12,7 @@ import urllib.request
 from pathlib import Path
 
 API = "https://api.scryfall.com"
+UNUSABLE_IMAGE_STATUSES = {"missing", "placeholder"}
 BASIC_NAMES = {
     "Plains",
     "Island",
@@ -154,6 +155,14 @@ def card_image_uri(card):
     return ""
 
 
+def has_usable_image(card):
+    return bool(card_image_uri(card)) and card.get("image_status", "") not in UNUSABLE_IMAGE_STATUSES
+
+
+def usable_card_image_uri(card):
+    return card_image_uri(card) if has_usable_image(card) else ""
+
+
 def exact_print_match(data, printed):
     folded = printed.casefold()
     for card in data:
@@ -200,8 +209,10 @@ def same_language_print(card, lang):
         data = request_json(url).get("data") or []
     except RuntimeError:
         return card
-    with_image = [item for item in data if card_image_uri(item)]
-    return (with_image or data or [card])[0]
+    with_real_image = [item for item in data if has_usable_image(item)]
+    if with_real_image:
+        return with_real_image[0]
+    return card
 
 
 def resolve_entry(entry, default_lang):
@@ -214,6 +225,8 @@ def resolve_entry(entry, default_lang):
     if lang:
         chosen = search_printed(printed, lang)
         canonical = named_card(chosen["name"])
+        if not has_usable_image(chosen):
+            chosen = same_language_print(canonical, lang)
         return canonical, chosen
     canonical = named_card(printed)
     return canonical, canonical
@@ -229,6 +242,8 @@ def image_data_for(uri, embed_images):
 
 
 def viewer_faces(card, fallback_name, embed_images):
+    if not has_usable_image(card):
+        return []
     faces = []
     for index, face in enumerate(card.get("card_faces") or []):
         uri = image_uri_from_object(face)
@@ -245,7 +260,7 @@ def viewer_faces(card, fallback_name, embed_images):
     if len(faces) > 1:
         return faces
 
-    uri = card_image_uri(card)
+    uri = usable_card_image_uri(card)
     if not uri:
         return []
     return [
@@ -281,7 +296,7 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
     card_name = canonical.get("name") or chosen.get("name") or requested
     faces = viewer_faces(chosen, card_name, embed_images)
     active_face = faces[0] if faces else {}
-    image_uri = active_face.get("imageUri") or card_image_uri(chosen)
+    image_uri = active_face.get("imageUri") or usable_card_image_uri(chosen)
     image_data = active_face.get("imageData") or image_data_for(image_uri, embed_images)
     type_line = canonical.get("type_line") or chosen.get("type_line") or ""
     return {

@@ -16,7 +16,7 @@ It replicates manual sorting/viewing of physical cards.
 - Keeps lands on the right side of the table.
 - Supports free dragging, stack snapping, and between-card insertion while preserving visible stack spacing.
 - Shows a face switch on double-faced cards so you can view the other side.
-- Lets clicked cards temporarily rise to the top for inspection, then return to their stack layer when you click away.
+- Lets held cards temporarily rise to the top for inspection, then return to their stack layer on release.
 - Adds/removes individual cards.
 - Asks before removing a card with right-click.
 - Includes Undo, Redo, and Reset Positions controls. Undo stores the last five changes.
@@ -46,9 +46,8 @@ The viewer loads one visual card per non-empty decklist line. Scryfall fetches a
 - Right-click a card to remove it after confirmation.
 - Drop near another card to snap into that stack.
 - Hold Shift while dropping to place freely without snapping.
-- Click a card to bring it forward temporarily.
+- Hold a card to bring it forward temporarily; release to return it to its stack layer.
 - Use the small face number on double-faced cards, or double-click the card, to flip sides.
-- Click empty table space or the controls panel to return a focused card to its stack layer.
 - Use Undo, Redo, and Reset Positions to manage manual layout and add/remove changes.
 - Use Save / Export to write a portable table save to your device. Choose whether to embed images for offline imports.
 - Use Import Save to reload a saved decklist, card placement, and either embedded images or Scryfall image URLs.
