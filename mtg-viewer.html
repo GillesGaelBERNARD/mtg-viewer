@@ -541,6 +541,14 @@
       </div>
       <input id="import-file" class="screen-reader-only" type="file" accept=".mtg-viewer.json,application/json">
 
+      <div class="status" aria-live="polite">
+        <strong id="status-title">Ready</strong>
+        <span id="status-detail">Cards use 63 x 88 mm proportions and are placed by type, then mana value.</span>
+        <div class="meter" aria-hidden="true"><span id="progress-bar"></span></div>
+      </div>
+
+      <p class="hint-line">Drag the empty table to pan. Wheel to zoom. Drop near any stack to align; hold Shift for a free drop.</p>
+
       <div class="field">
         <label for="zoom-sensitivity">Zoom sensitivity <output id="zoom-value">1.00x</output></label>
         <input id="zoom-sensitivity" type="range" min="0.35" max="2.2" step="0.05" value="1">
@@ -555,14 +563,6 @@
         <label for="placement-delay">Placement rhythm <output id="delay-value">140ms</output></label>
         <input id="placement-delay" type="range" min="0" max="500" step="20" value="140">
       </div>
-
-      <div class="status" aria-live="polite">
-        <strong id="status-title">Ready</strong>
-        <span id="status-detail">Cards use 63 x 88 mm proportions and are placed by type, then mana value.</span>
-        <div class="meter" aria-hidden="true"><span id="progress-bar"></span></div>
-      </div>
-
-      <p class="hint-line">Drag the empty table to pan. Wheel to zoom. Drop near any stack to align; hold Shift for a free drop.</p>
     </div>
   </aside>
 
@@ -1146,9 +1146,9 @@
         return Number.isFinite(card.order) ? card.order : 0;
       }
 
-      function manaColumnX(manaValue) {
+      function manaColumnX(manaValue, firstManaValue = 1) {
         const value = Number(manaValue);
-        const column = value <= 0 ? -1 : value - 1;
+        const column = Math.max(0, Math.floor(value) - firstManaValue);
         return LEFT_MM + column * columnStepMm();
       }
 
@@ -1182,6 +1182,7 @@
         const groups = groupCards(cards);
         const structureGroups = groupCards(structureCards);
         const layoutManaValues = getLayoutManaValues(structureCards);
+        const firstManaValue = layoutManaValues[0] ?? 1;
         const positions = new Map();
         const labels = [];
         const manaLabels = [];
@@ -1204,7 +1205,7 @@
           labels.push({ id: category.id, label: category.label, count: structureGroup.length, x: LEFT_MM, y: y - 28 });
 
           for (const manaValue of layoutManaValues) {
-            const x = manaColumnX(manaValue);
+            const x = manaColumnX(manaValue, firstManaValue);
             manaLabels.push({ category: category.id, value: manaValue, x, y: y - 10 });
             minX = Math.min(minX, x);
             maxX = Math.max(maxX, x + CARD_MM.width);
