@@ -594,7 +594,7 @@
         { id: "vehicles", label: "Vehicles", test: card => hasType(card, "vehicle") },
         { id: "spacecraft", label: "Spacecraft", test: card => hasType(card, "spacecraft") },
         { id: "planeswalkers", label: "Planeswalkers", test: card => hasType(card, "planeswalker") },
-        { id: "enchantments-equipment", label: "Enchantments / Equipment", test: card => hasType(card, "enchantment") || hasType(card, "equipment") || hasType(card, "artifact") },
+        { id: "enchantments-equipment-artifacts", label: "Enchantments / Equipment / Artifacts", test: card => isSupportPermanent(card) },
         { id: "instants-rituals", label: "Instants / Rituals", test: card => hasType(card, "instant") || hasType(card, "sorcery") },
         { id: "other", label: "Other", test: () => true }
       ];
@@ -684,6 +684,20 @@
         return typeText(card).includes(type);
       }
 
+      function isSupportPermanent(card) {
+        if (hasType(card, "creature") || hasType(card, "vehicle") || hasType(card, "spacecraft") || hasType(card, "planeswalker")) {
+          return false;
+        }
+        return hasType(card, "enchantment") || hasType(card, "equipment") || hasType(card, "artifact");
+      }
+
+      function normalizeCategoryId(id) {
+        if (id === "enchantments-equipment") return "enchantments-equipment-artifacts";
+        if (id === "enchantments-equipment-artifacts") return id;
+        if (id === "lands") return id;
+        return CATEGORY_ORDER.some(category => category.id === id) ? id : "";
+      }
+
       function getManaValue(card) {
         const value = Number(card.cmc ?? card.mana_value ?? card.manaValue ?? 0);
         return Number.isFinite(value) ? Math.floor(value) : 0;
@@ -707,6 +721,7 @@
       }
 
       function categoryLabel(id) {
+        id = normalizeCategoryId(id) || id;
         if (id === "lands") return "Lands";
         return CATEGORY_ORDER.find(category => category.id === id)?.label || "Other";
       }
@@ -938,7 +953,7 @@
           imageData,
           typeLine,
           manaValue: Number.isFinite(Number(saved.manaValue)) ? Math.floor(Number(saved.manaValue)) : 0,
-          category: String(saved.category || categorize({ type_line: typeLine })),
+          category: normalizeCategoryId(String(saved.category || "")) || categorize({ type_line: typeLine }),
           error: String(saved.error || ""),
           order: Number.isFinite(Number(saved.order)) ? Number(saved.order) : index + 1,
           initialOrder: Number.isFinite(Number(saved.initialOrder)) ? Number(saved.initialOrder) : index + 1,
@@ -1115,6 +1130,7 @@
         groups.set("lands", []);
 
         for (const card of cards) {
+          card.category = normalizeCategoryId(card.category) || categorize(card);
           const target = groups.get(card.category) || groups.get("other");
           target.push(card);
         }

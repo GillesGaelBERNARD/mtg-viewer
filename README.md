@@ -11,7 +11,7 @@ It replicates manual sorting/viewing of physical cards.
 ## Features
 
 - Imports card images from Scryfall by card name.
-- Groups cards into creature, vehicle, spacecraft, planeswalker, enchantment/equipment/artifact, instant/ritual, other, and land areas.
+- Groups cards into creature, vehicle, spacecraft, planeswalker, enchantments/equipment/artifacts, instant/ritual, other, and land areas.
 - Aligns non-land cards by mana value.
 - Keeps lands on the right side of the table.
 - Supports free dragging, stack snapping, and between-card insertion while preserving visible stack spacing.
