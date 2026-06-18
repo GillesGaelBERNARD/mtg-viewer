@@ -16,9 +16,9 @@ It replicates manual sorting/viewing of physical cards.
 - Keeps lands on the right side of the table.
 - Supports free dragging, stack snapping, and between-card insertion while preserving visible stack spacing.
 - Lets clicked cards temporarily rise to the top for inspection, then return to their stack layer when you click away.
-- Adds individual cards without resetting the current table.
+- Adds/removes individual cards.
 - Asks before removing a card with right-click.
-- Includes Undo, Redo, and Reset Positions controls. Undo stores the last five changes, including add/remove actions.
+- Includes Undo, Redo, and Reset Positions controls. Undo stores the last five changes.
 - Saves and imports `.mtg-viewer.json` bundles containing the decklist, card placement, and Scryfall image URLs, with optional embedded images for offline use.
 - Provides pan, zoom, fit, and center controls for large deck layouts.
 
@@ -61,7 +61,7 @@ Card data and images are loaded from the public Scryfall API. Magic: The Gatheri
 
 ## Limitions
 
-Opinionated automated categories (equivalent to one way I layout physical cards out to visual a deck)
+Opinionated automated categories (equivalent to one way I layout physical cards out to visualize a deck)
 
 ## To Dos
 1. Add controls for categories
