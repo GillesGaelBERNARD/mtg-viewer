@@ -174,14 +174,21 @@
       transform: scale(1.012);
     }
 
+    .card.is-selected {
+      border-color: rgba(143, 182, 255, 0.9);
+      box-shadow:
+        0 18px 32px rgba(0, 0, 0, 0.58),
+        0 0 0 2px rgba(143, 182, 255, 0.86),
+        0 0 26px rgba(143, 182, 255, 0.24);
+    }
+
     #table.is-camera-redrawing .card {
       transition: none !important;
     }
 
-    .snap-guide {
+    .snap-guide,
+    .selection-box {
       position: absolute;
-      width: var(--scaled-card-w);
-      height: var(--scaled-card-h);
       border: 2px dashed rgba(102, 217, 194, 0.82);
       border-radius: var(--scaled-card-radius);
       background: rgba(102, 217, 194, 0.08);
@@ -190,7 +197,21 @@
       z-index: 99998;
     }
 
-    .snap-guide[hidden] {
+    .snap-guide {
+      width: var(--scaled-card-w);
+      height: var(--scaled-card-h);
+    }
+
+    .selection-box {
+      border-color: rgba(143, 182, 255, 0.88);
+      border-radius: 6px;
+      background: rgba(143, 182, 255, 0.10);
+      box-shadow: 0 0 26px rgba(143, 182, 255, 0.18);
+      z-index: 99997;
+    }
+
+    .snap-guide[hidden],
+    .selection-box[hidden] {
       display: none;
     }
 
@@ -680,7 +701,9 @@
         panSensitivity: 1,
         placementDelay: 140,
         bounds: null,
-        snapAnchors: []
+        snapAnchors: [],
+        selectedCardIds: new Set(),
+        suppressContextMenu: false
       };
 
       const viewport = document.getElementById("viewport");
@@ -1325,6 +1348,8 @@
         }
 
         state.abortController?.abort();
+        clearSelection();
+        hideSelectionBox();
         const usedIds = new Set();
         state.cards = bundle.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
         state.undoStack = [];
@@ -1445,10 +1470,12 @@
         attachCardDrag(element, card);
         element.addEventListener("contextmenu", event => {
           event.preventDefault();
+          if (state.suppressContextMenu) return;
           if (!window.confirm(`Remove ${card.name} from the table?`)) return;
           clearCardPreview();
           const before = snapshotPositions();
           state.cards = state.cards.filter(item => item.id !== card.id);
+          state.selectedCardIds.delete(card.id);
           element.remove();
           rememberPositionSnapshot(before);
           syncDecklistFromCards();
@@ -1465,6 +1492,7 @@
         });
         table.appendChild(element);
         card.element = element;
+        syncCardSelection(card);
         return element;
       }
 
@@ -1792,6 +1820,70 @@
         if (guide) guide.hidden = true;
       }
 
+      function getSelectionBox() {
+        let box = table.querySelector(".selection-box");
+        if (!box) {
+          box = document.createElement("div");
+          box.className = "selection-box";
+          box.hidden = true;
+          table.appendChild(box);
+        }
+        return box;
+      }
+
+      function hideSelectionBox() {
+        const box = table.querySelector(".selection-box");
+        if (box) box.hidden = true;
+      }
+
+      function screenToTablePx(clientX, clientY) {
+        return {
+          x: clientX - state.camera.x,
+          y: clientY - state.camera.y
+        };
+      }
+
+      function selectedCards() {
+        return state.cards.filter(card => state.selectedCardIds.has(card.id));
+      }
+
+      function syncCardSelection(card) {
+        if (card.element) {
+          card.element.classList.toggle("is-selected", state.selectedCardIds.has(card.id));
+        }
+      }
+
+      function syncSelectionStyles() {
+        state.cards.forEach(syncCardSelection);
+      }
+
+      function clearSelection() {
+        if (!state.selectedCardIds.size) return;
+        state.selectedCardIds.clear();
+        syncSelectionStyles();
+      }
+
+      function setSelectionFromRect(rect) {
+        state.selectedCardIds.clear();
+        for (const card of state.cards) {
+          const position = getLiveCardPosition(card);
+          if (!position) continue;
+          const centerX = position.x + CARD_MM.width / 2;
+          const centerY = position.y + CARD_MM.height / 2;
+          if (centerX >= rect.left && centerX <= rect.right && centerY >= rect.top && centerY <= rect.bottom) {
+            state.selectedCardIds.add(card.id);
+          }
+        }
+        syncSelectionStyles();
+      }
+
+      function suppressNextContextMenu() {
+        state.suppressContextMenu = true;
+        window.setTimeout(() => {
+          state.suppressContextMenu = false;
+        }, 250);
+      }
+
       function canUseSnapAnchor(card, other) {
         return card.id !== other.id;
       }
@@ -1978,21 +2070,37 @@
           if (event.button === 2) return;
           event.preventDefault();
           event.stopPropagation();
+          const isGroupDrag = state.selectedCardIds.has(card.id) && state.selectedCardIds.size > 1;
+          const dragCards = isGroupDrag ? selectedCards() : [card];
+          if (!state.selectedCardIds.has(card.id)) clearSelection();
+          clearCardPreview();
           drag = {
             pointerId: event.pointerId,
             startX: event.clientX,
             startY: event.clientY,
-            leftPx: parseFloat(element.style.left || "0"),
-            topPx: parseFloat(element.style.top || "0"),
+            cards: dragCards.map(item => {
+              const itemElement = ensureCardElement(item);
+              return {
+                card: item,
+                element: itemElement,
+                leftPx: parseFloat(itemElement.style.left || "0"),
+                topPx: parseFloat(itemElement.style.top || "0"),
+                zIndex: itemElement.style.zIndex || "",
+                manualBefore: item.manualPosition ? { ...item.manualPosition } : null
+              };
+            }),
             before: snapshotPositions(),
-            manualBefore: card.manualPosition ? { ...card.manualPosition } : null,
+            group: isGroupDrag,
             moved: false
           };
           if (element.setPointerCapture) {
             element.setPointerCapture(event.pointerId);
           }
-          element.classList.add("is-dragging");
-          liftCardForPreview(card, element);
+          for (const item of drag.cards) {
+            item.element.classList.add("is-dragging");
+            if (drag.group) item.element.style.zIndex = String(++state.z);
+          }
+          if (!drag.group) liftCardForPreview(card, element);
           hideSnapGuide();
           window.addEventListener("pointermove", dragCard);
           window.addEventListener("pointerup", endCardDrag);
@@ -2006,14 +2114,21 @@
           if (Math.abs(event.clientX - drag.startX) > 2 || Math.abs(event.clientY - drag.startY) > 2) {
             drag.moved = true;
           }
-          const xPx = drag.leftPx + dx;
-          const yPx = drag.topPx + dy;
-          element.style.left = `${xPx}px`;
-          element.style.top = `${yPx}px`;
-          card.manualPosition = { x: pxToMm(xPx), y: pxToMm(yPx) };
-          drag.snap = findSnapCandidate(card, card.manualPosition.x, card.manualPosition.y, event.shiftKey);
-          if (drag.snap) showSnapGuide(drag.snap);
-          else hideSnapGuide();
+          for (const item of drag.cards) {
+            const xPx = item.leftPx + dx;
+            const yPx = item.topPx + dy;
+            item.element.style.left = `${xPx}px`;
+            item.element.style.top = `${yPx}px`;
+            item.card.manualPosition = { x: pxToMm(xPx), y: pxToMm(yPx) };
+          }
+          if (drag.group) {
+            drag.snap = null;
+            hideSnapGuide();
+          } else {
+            drag.snap = findSnapCandidate(card, card.manualPosition.x, card.manualPosition.y, event.shiftKey);
+            if (drag.snap) showSnapGuide(drag.snap);
+            else hideSnapGuide();
+          }
         }
 
         function endCardDrag(event) {
@@ -2021,7 +2136,7 @@
           if (element.releasePointerCapture && element.hasPointerCapture(event.pointerId)) {
             element.releasePointerCapture(event.pointerId);
           }
-          element.classList.remove("is-dragging");
+          for (const item of drag.cards) item.element.classList.remove("is-dragging");
           window.removeEventListener("pointermove", dragCard);
           window.removeEventListener("pointerup", endCardDrag);
           window.removeEventListener("pointercancel", endCardDrag);
@@ -2036,28 +2151,115 @@
             hideSnapGuide();
             if (event.type !== "pointercancel") {
               if (drag.moved) {
-                commitCardPreview();
+                if (!drag.group) commitCardPreview();
                 state.labelsHidden = true;
                 layoutCards();
-                setStatus("Placed", `${card.name} placed freely. Drop near any stack to align.`);
+                setStatus(
+                  "Placed",
+                  drag.group
+                    ? `${drag.cards.length} selected cards moved together.`
+                    : `${card.name} placed freely. Drop near any stack to align.`
+                );
               } else {
-                if (drag.manualBefore) card.manualPosition = { ...drag.manualBefore };
-                else delete card.manualPosition;
-                element.style.left = `${drag.leftPx}px`;
-                element.style.top = `${drag.topPx}px`;
+                for (const item of drag.cards) {
+                  if (item.manualBefore) item.card.manualPosition = { ...item.manualBefore };
+                  else delete item.card.manualPosition;
+                  item.element.style.left = `${item.leftPx}px`;
+                  item.element.style.top = `${item.topPx}px`;
+                  if (drag.group) item.element.style.zIndex = item.zIndex;
+                }
                 clearCardPreview();
-                setStatus("Viewed", `${card.name} returned to its stack layer.`);
+                if (!drag.group) setStatus("Viewed", `${card.name} returned to its stack layer.`);
               }
             } else {
-              if (drag.manualBefore) card.manualPosition = { ...drag.manualBefore };
-              else delete card.manualPosition;
-              element.style.left = `${drag.leftPx}px`;
-              element.style.top = `${drag.topPx}px`;
+              for (const item of drag.cards) {
+                if (item.manualBefore) item.card.manualPosition = { ...item.manualBefore };
+                else delete item.card.manualPosition;
+                item.element.style.left = `${item.leftPx}px`;
+                item.element.style.top = `${item.topPx}px`;
+                if (drag.group) item.element.style.zIndex = item.zIndex;
+              }
               clearCardPreview();
             }
           }
           updateHistoryButtons();
           drag = null;
+        }
+      }
+
+      function attachSelectionBox() {
+        let selection = null;
+        viewport.addEventListener("pointerdown", event => {
+          if (event.button !== 2 || event.target.closest("#controls")) return;
+          const start = screenToTablePx(event.clientX, event.clientY);
+          selection = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            start,
+            moved: false
+          };
+          try {
+            if (viewport.setPointerCapture) viewport.setPointerCapture(event.pointerId);
+          } catch (error) {
+            // Some browsers only allow capture on the original right-click target.
+          }
+          window.addEventListener("pointermove", dragSelectionBox);
+          window.addEventListener("pointerup", endSelectionBox);
+          window.addEventListener("pointercancel", endSelectionBox);
+        });
+
+        function dragSelectionBox(event) {
+          if (!selection || event.pointerId !== selection.pointerId) return;
+          const moved = Math.abs(event.clientX - selection.startX) > 4 || Math.abs(event.clientY - selection.startY) > 4;
+          if (!moved && !selection.moved) return;
+          if (!selection.moved) {
+            selection.moved = true;
+            clearCardPreview();
+            suppressNextContextMenu();
+          }
+          event.preventDefault();
+          const current = screenToTablePx(event.clientX, event.clientY);
+          const leftPx = Math.min(selection.start.x, current.x);
+          const topPx = Math.min(selection.start.y, current.y);
+          const rightPx = Math.max(selection.start.x, current.x);
+          const bottomPx = Math.max(selection.start.y, current.y);
+          const box = getSelectionBox();
+          box.hidden = false;
+          box.style.left = `${leftPx}px`;
+          box.style.top = `${topPx}px`;
+          box.style.width = `${rightPx - leftPx}px`;
+          box.style.height = `${bottomPx - topPx}px`;
+          setSelectionFromRect({
+            left: pxToMm(leftPx),
+            top: pxToMm(topPx),
+            right: pxToMm(rightPx),
+            bottom: pxToMm(bottomPx)
+          });
+        }
+
+        function endSelectionBox(event) {
+          if (!selection || event.pointerId !== selection.pointerId) return;
+          if (viewport.releasePointerCapture) {
+            try {
+              if (!viewport.hasPointerCapture || viewport.hasPointerCapture(event.pointerId)) {
+                viewport.releasePointerCapture(event.pointerId);
+              }
+            } catch (error) {
+              // Pointer capture may have stayed with the original right-click target.
+            }
+          }
+          window.removeEventListener("pointermove", dragSelectionBox);
+          window.removeEventListener("pointerup", endSelectionBox);
+          window.removeEventListener("pointercancel", endSelectionBox);
+          if (selection.moved) {
+            event.preventDefault();
+            suppressNextContextMenu();
+            hideSelectionBox();
+            const count = state.selectedCardIds.size;
+            setStatus(count ? "Selected" : "No selection", count ? `${count} card${count === 1 ? "" : "s"} selected.` : "No cards inside the rectangle.");
+          }
+          selection = null;
         }
       }
 
@@ -2207,6 +2409,8 @@
 
       function restorePositions(snapshot) {
         state.previewCard = null;
+        clearSelection();
+        hideSelectionBox();
         table.querySelectorAll(".card").forEach(card => card.remove());
         const usedIds = new Set();
         state.cards = snapshot.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
@@ -2347,6 +2551,8 @@
         state.abortController?.abort();
         state.abortController = new AbortController();
         state.cards = [];
+        clearSelection();
+        hideSelectionBox();
         state.nextOrder = 1;
         state.undoStack = [];
         state.redoStack = [];
@@ -2411,6 +2617,8 @@
       function clearTable() {
         state.abortController?.abort();
         state.cards = [];
+        clearSelection();
+        hideSelectionBox();
         state.nextOrder = 1;
         state.undoStack = [];
         state.redoStack = [];
@@ -2464,6 +2672,11 @@
           if (!state.previewCard || event.target.closest(".card")) return;
           clearCardPreview(true);
         }, true);
+        document.addEventListener("contextmenu", event => {
+          if (!state.suppressContextMenu) return;
+          event.preventDefault();
+          event.stopPropagation();
+        }, true);
         zoomSensitivityInput.addEventListener("input", updateSensitivityLabels);
         panSensitivityInput.addEventListener("input", updateSensitivityLabels);
         placementDelayInput.addEventListener("input", updateSensitivityLabels);
@@ -2474,6 +2687,8 @@
       }
 
       function seedForTests(cards) {
+        clearSelection();
+        hideSelectionBox();
         state.cards = cards.map((card, index) => ({
           id: card.id || `test-${index}`,
           requestedName: card.name,
@@ -2510,6 +2725,7 @@
 
       function init() {
         attachControls();
+        attachSelectionBox();
         attachViewportPan();
         attachWheelZoom();
         updateSensitivityLabels();
