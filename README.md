@@ -61,6 +61,10 @@ Save files are plain JSON with the `.mtg-viewer.json` extension. Browsers that s
 
 Card data and images are loaded from the public Scryfall API. Magic: The Gathering card names, text, and images belong to their respective rights holders.
 
+## AI Agent Skill
+
+The repo also includes a separate Codex skill at `agent-skills/mtg-viewer-from-deck-images/`. It guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including language-preserving Scryfall images, duplicate audits, offline image embedding, and multi-face card images.
+
 ## Limitions
 
 Opinionated automated categories (equivalent to one way I layout physical cards out to visualize a deck)

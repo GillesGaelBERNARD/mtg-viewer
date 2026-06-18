@@ -1,0 +1,4 @@
+interface:
+  display_name: "MTG Viewer From Deck Images"
+  short_description: "Create MTG Viewer saves from deck photos"
+  default_prompt: "Use $mtg-viewer-from-deck-images to create an mtg-viewer save from these deck photos."
