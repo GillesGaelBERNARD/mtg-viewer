@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MTG Table Viewer</title>
+  <title>MTG Deck Table Viewer</title>
   <style>
     :root {
       color-scheme: dark;
@@ -289,6 +289,28 @@
       display: none;
     }
 
+    #deck-title-banner {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      z-index: 9000;
+      max-width: min(520px, calc(100vw - 32px));
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      border: 1px solid rgba(143, 182, 255, 0.24);
+      border-radius: 8px;
+      background: rgba(13, 19, 29, 0.78);
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.34);
+      color: #eef8ff;
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.2;
+      text-align: center;
+      pointer-events: none;
+      backdrop-filter: blur(12px);
+      overflow-wrap: anywhere;
+    }
+
     #toggle-panel {
       position: absolute;
       right: 8px;
@@ -326,6 +348,24 @@
       color: var(--muted);
       font-size: 13px;
       line-height: 1.35;
+    }
+
+    .deck-title-display {
+      margin-top: 10px;
+      padding: 8px 10px;
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      background: rgba(102, 217, 194, 0.08);
+      color: #eef8ff;
+      font-size: 14px;
+      font-weight: 740;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .deck-title-display[hidden],
+    #deck-title-banner[hidden] {
+      display: none;
     }
 
     textarea {
@@ -503,13 +543,15 @@
   <main id="viewport" aria-label="MTG table surface">
     <section id="table" aria-label="Movable card table"></section>
   </main>
+  <div id="deck-title-banner" hidden></div>
 
   <aside id="controls" aria-label="Table controls">
     <button id="toggle-panel" class="icon-button" type="button" title="Collapse menu" aria-label="Collapse menu">x</button>
     <div id="control-content">
       <div class="title-row">
-        <h1>MTG Table Viewer</h1>
-        <p class="subtle">Import Scryfall card images, then move the cards around on a dark table.</p>
+        <h1>MTG Deck Table Viewer</h1>
+        <p class="subtle">Import a card list, then move cards them around.</p>
+        <div id="deck-title-display" class="deck-title-display" hidden></div>
       </div>
 
       <label class="screen-reader-only" for="decklist">Decklist</label>
@@ -518,6 +560,7 @@
       <div class="button-row">
         <button id="load-cards" class="primary" type="button">Load Cards</button>
         <button id="add-card" type="button">Add Card</button>
+        <button id="name-deck" type="button">Name Deck</button>
         <button id="stop-loading" type="button" disabled>Stop</button>
         <button id="clear-table" type="button">Clear</button>
       </div>
@@ -611,6 +654,7 @@
         undoStack: [],
         redoStack: [],
         labelsHidden: false,
+        deckTitle: "",
         previewCard: null,
         zoomSensitivity: 1,
         panSensitivity: 1,
@@ -623,8 +667,11 @@
       const controls = document.getElementById("controls");
       const togglePanelButton = document.getElementById("toggle-panel");
       const decklistInput = document.getElementById("decklist");
+      const deckTitleDisplay = document.getElementById("deck-title-display");
+      const deckTitleBanner = document.getElementById("deck-title-banner");
       const loadButton = document.getElementById("load-cards");
       const addCardButton = document.getElementById("add-card");
+      const nameDeckButton = document.getElementById("name-deck");
       const stopButton = document.getElementById("stop-loading");
       const clearButton = document.getElementById("clear-table");
       const centerButton = document.getElementById("center-table");
@@ -674,6 +721,31 @@
 
       function syncDecklistFromCards() {
         decklistInput.value = state.cards.map(cardDeckLine).join("\n");
+      }
+
+      function cleanDeckTitle(value) {
+        return String(value || "").trim().replace(/\s+/g, " ").slice(0, 90);
+      }
+
+      function setDeckTitle(title, options = {}) {
+        state.deckTitle = cleanDeckTitle(title);
+        deckTitleDisplay.textContent = state.deckTitle;
+        deckTitleDisplay.hidden = !state.deckTitle;
+        deckTitleBanner.textContent = state.deckTitle;
+        deckTitleBanner.hidden = !state.deckTitle;
+        nameDeckButton.textContent = state.deckTitle ? "Rename Deck" : "Name Deck";
+        if (options.status !== false) {
+          setStatus(
+            state.deckTitle ? "Deck named" : "Deck title cleared",
+            state.deckTitle ? `Deck title set to ${state.deckTitle}.` : "No deck title is set."
+          );
+        }
+      }
+
+      function promptDeckTitle() {
+        const title = window.prompt("Deck title (leave blank to clear)", state.deckTitle);
+        if (title === null) return;
+        setDeckTitle(title);
       }
 
       function typeText(card) {
@@ -818,8 +890,8 @@
       }
 
       function makeBundleFilename() {
-        const firstName = state.cards[0]?.name || "deck";
-        const safeName = firstName
+        const baseName = state.deckTitle || state.cards[0]?.name || "deck";
+        const safeName = baseName
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-+|-+$/g, "")
@@ -848,6 +920,7 @@
           version: SAVE_VERSION,
           savedAt: new Date().toISOString(),
           offlineImages: embedImages,
+          deckTitle: state.deckTitle,
           decklist: decklistInput.value,
           layout: {
             nextOrder: state.nextOrder,
@@ -979,6 +1052,7 @@
         state.undoStack = [];
         state.redoStack = [];
         state.labelsHidden = Boolean(bundle.layout?.labelsHidden);
+        setDeckTitle(bundle.deckTitle || "", { status: false });
         state.previewCard = null;
         state.nextOrder = Number.isFinite(Number(bundle.layout?.nextOrder))
           ? Number(bundle.layout.nextOrder)
@@ -1692,6 +1766,7 @@
         state.loading = isLoading;
         loadButton.disabled = isLoading;
         addCardButton.disabled = isLoading;
+        nameDeckButton.disabled = isLoading;
         stopButton.disabled = !isLoading;
         updateHistoryButtons();
       }
@@ -1701,6 +1776,7 @@
           nextOrder: state.nextOrder,
           z: state.z,
           labelsHidden: state.labelsHidden,
+          deckTitle: state.deckTitle,
           decklist: decklistInput.value,
           cards: state.cards.map(serializeBoardCard)
         };
@@ -1711,6 +1787,7 @@
         table.querySelectorAll(".card").forEach(card => card.remove());
         const usedIds = new Set();
         state.cards = snapshot.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
+        setDeckTitle(snapshot.deckTitle || "", { status: false });
         decklistInput.value = typeof snapshot.decklist === "string" ? snapshot.decklist : state.cards.map(cardDeckLine).join("\n");
         for (const [index, card] of state.cards.entries()) {
           const element = ensureCardElement(card);
@@ -1916,6 +1993,7 @@
         state.redoStack = [];
         state.labelsHidden = false;
         state.previewCard = null;
+        setDeckTitle("", { status: false });
         decklistInput.value = "";
         table.querySelectorAll(".card").forEach(card => card.remove());
         layoutCards();
@@ -1942,6 +2020,7 @@
         });
         loadButton.addEventListener("click", loadDeck);
         addCardButton.addEventListener("click", promptAddCard);
+        nameDeckButton.addEventListener("click", promptDeckTitle);
         stopButton.addEventListener("click", () => state.abortController?.abort());
         clearButton.addEventListener("click", clearTable);
         centerButton.addEventListener("click", centerTable);
@@ -2023,6 +2102,7 @@
           computeLayout,
           loadDeck,
           addCardByName,
+          setDeckTitle,
           seedForTests,
           createSaveBundle,
           restoreSaveBundle,
