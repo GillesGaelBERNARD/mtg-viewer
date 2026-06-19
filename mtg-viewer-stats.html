@@ -67,6 +67,17 @@
       opacity: 0.48;
     }
 
+    button.danger {
+      border-color: rgba(255, 107, 107, 0.42);
+      background: rgba(132, 35, 42, 0.58);
+      color: #fff1f1;
+    }
+
+    button.danger:hover {
+      border-color: rgba(255, 148, 148, 0.72);
+      background: rgba(164, 44, 52, 0.72);
+    }
+
     #viewport {
       position: fixed;
       inset: 0;
@@ -397,19 +408,22 @@
 
     #global-view-tabs {
       position: fixed;
-      top: 58px;
-      left: 50%;
+      top: 22px;
+      left: min(calc(100vw - 344px), calc(min(380px, calc(100vw - 28px)) + 28px));
       z-index: 9500;
       display: grid;
       grid-template-columns: repeat(3, minmax(92px, 1fr));
       gap: 6px;
-      transform: translateX(-50%);
       padding: 6px;
       border: 1px solid rgba(143, 182, 255, 0.22);
       border-radius: 8px;
       background: rgba(13, 19, 29, 0.80);
       box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
       backdrop-filter: blur(12px);
+    }
+
+    body.panel-collapsed #global-view-tabs {
+      left: 78px;
     }
 
     .view-tab {
@@ -488,10 +502,9 @@
       display: none;
     }
 
-    textarea {
+    textarea,
+    input[type="text"] {
       width: 100%;
-      height: 164px;
-      resize: vertical;
       color: var(--text);
       background: #0d131d;
       border: 1px solid var(--line);
@@ -499,6 +512,11 @@
       padding: 10px;
       line-height: 1.35;
       outline: none;
+    }
+
+    textarea {
+      height: 164px;
+      resize: vertical;
       margin: 10px 0 10px;
     }
 
@@ -765,6 +783,19 @@
       font-weight: 700;
     }
 
+    .color-stat-header {
+      margin-top: 0;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 820;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .color-stat-header span:first-child {
+      width: 26px;
+    }
+
     .color-dot {
       width: 26px;
       height: 26px;
@@ -822,7 +853,7 @@
 
     .stats-board-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 18px;
       margin-top: 18px;
     }
@@ -836,6 +867,18 @@
 
     .stats-board-section.wide {
       grid-column: 1 / -1;
+    }
+
+    .stats-board .stat-row {
+      grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.4fr) minmax(52px, 0.2fr);
+      gap: 14px;
+      min-height: 32px;
+    }
+
+    .stats-board .stat-row-label {
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
     }
 
     .bucket-chip-list {
@@ -940,6 +983,13 @@
       color: #d8e4f4;
       font-size: 12px;
       font-weight: 700;
+    }
+
+    .inline-create {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      margin: 12px 0;
     }
 
     .screen-reader-only {
@@ -1052,21 +1102,12 @@
       </section>
 
       <section class="panel-view" id="panel-stats" hidden>
-        <div id="summary-stats" class="stats-grid"></div>
-        <div class="stats-section">
-          <h2>Mana Curve</h2>
+        <p class="hint-line">Stats are shown on the table. Use pan, zoom, fit, and center to inspect the board.</p>
+        <div class="stats-cache" hidden>
+          <div id="summary-stats" class="stats-grid"></div>
           <div id="mana-curve-stats"></div>
-        </div>
-        <div class="stats-section">
-          <h2>Types</h2>
           <div id="type-stats"></div>
-        </div>
-        <div class="stats-section">
-          <h2>Colors</h2>
           <div id="color-stats"></div>
-        </div>
-        <div class="stats-section">
-          <h2>Utility Buckets</h2>
           <div id="bucket-stats"></div>
         </div>
       </section>
@@ -1101,10 +1142,25 @@
       <h2 id="bucket-modal-title">Edit Utility Buckets</h2>
       <p id="bucket-modal-detail" class="subtle"></p>
       <div id="bucket-checks" class="bucket-checks"></div>
+      <div class="inline-create">
+        <input id="new-bucket-name" type="text" autocomplete="off" placeholder="New custom bucket">
+        <button id="create-bucket" type="button">Add Bucket</button>
+      </div>
       <div class="button-row">
         <button id="save-buckets" class="primary" type="button">Save Buckets</button>
         <button id="clear-buckets" type="button">Clear Buckets</button>
         <button id="cancel-buckets" type="button">Cancel</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="remove-card-modal-backdrop" class="modal-backdrop" hidden>
+    <section class="bucket-modal" role="dialog" aria-modal="true" aria-labelledby="remove-card-modal-title">
+      <h2 id="remove-card-modal-title">Remove Card</h2>
+      <p id="remove-card-modal-detail" class="subtle"></p>
+      <div class="button-row">
+        <button id="confirm-remove-card" class="primary danger" type="button">Remove Card</button>
+        <button id="cancel-remove-card" type="button">Cancel</button>
       </div>
     </section>
   </div>
@@ -1194,10 +1250,12 @@
         activeBucketFilter: "",
         bucketEntries: [],
         bucketSnapAnchors: [],
+        bucketFocusTargets: new Map(),
         customBuckets: [],
         oracleTagIndex: null,
         oracleTagPromise: null,
-        bucketEditor: null
+        bucketEditor: null,
+        pendingRemoveCard: null
       };
 
       const viewport = document.getElementById("viewport");
@@ -1207,6 +1265,7 @@
       const decklistInput = document.getElementById("decklist");
       const deckTitleDisplay = document.getElementById("deck-title-display");
       const deckTitleBanner = document.getElementById("deck-title-banner");
+      const globalViewTabs = document.getElementById("global-view-tabs");
       const viewTabs = [...document.querySelectorAll(".view-tab")];
       const panelViews = [...document.querySelectorAll(".panel-view")];
       const loadButton = document.getElementById("load-cards");
@@ -1246,9 +1305,15 @@
       const bucketModalBackdrop = document.getElementById("bucket-modal-backdrop");
       const bucketModalDetail = document.getElementById("bucket-modal-detail");
       const bucketChecks = document.getElementById("bucket-checks");
+      const newBucketNameInput = document.getElementById("new-bucket-name");
+      const createBucketButton = document.getElementById("create-bucket");
       const saveBucketsButton = document.getElementById("save-buckets");
       const clearBucketsButton = document.getElementById("clear-buckets");
       const cancelBucketsButton = document.getElementById("cancel-buckets");
+      const removeCardModalBackdrop = document.getElementById("remove-card-modal-backdrop");
+      const removeCardModalDetail = document.getElementById("remove-card-modal-detail");
+      const confirmRemoveCardButton = document.getElementById("confirm-remove-card");
+      const cancelRemoveCardButton = document.getElementById("cancel-remove-card");
 
       const wait = ms => new Promise(resolve => window.setTimeout(resolve, ms));
       const viewScale = () => state.camera.scale;
@@ -2336,6 +2401,38 @@
         };
       }
 
+      function openRemoveCardModal(card) {
+        if (!card) return;
+        state.pendingRemoveCard = card;
+        removeCardModalDetail.textContent = `Remove ${card.name} from the table? Undo can bring it back.`;
+        removeCardModalBackdrop.hidden = false;
+      }
+
+      function closeRemoveCardModal() {
+        state.pendingRemoveCard = null;
+        removeCardModalBackdrop.hidden = true;
+      }
+
+      function confirmRemoveCard() {
+        const card = state.pendingRemoveCard;
+        if (!card || !state.cards.some(item => item.id === card.id)) {
+          closeRemoveCardModal();
+          return;
+        }
+        clearCardPreview();
+        const before = snapshotPositions();
+        state.cards = state.cards.filter(item => item.id !== card.id);
+        state.selectedCardIds.delete(card.id);
+        card.element?.remove();
+        rememberPositionSnapshot(before);
+        syncDecklistFromCards();
+        layoutCards();
+        updateStatsAndBuckets();
+        updateHistoryButtons();
+        closeRemoveCardModal();
+        setStatus("Removed", `${card.name} left the table. Undo can bring it back.`);
+      }
+
       function ensureCardElement(card) {
         if (card.element) return card.element;
         const element = document.createElement("article");
@@ -2356,18 +2453,7 @@
         element.addEventListener("contextmenu", event => {
           event.preventDefault();
           if (state.suppressContextMenu) return;
-          if (!window.confirm(`Remove ${card.name} from the table?`)) return;
-          clearCardPreview();
-          const before = snapshotPositions();
-          state.cards = state.cards.filter(item => item.id !== card.id);
-          state.selectedCardIds.delete(card.id);
-          element.remove();
-          rememberPositionSnapshot(before);
-          syncDecklistFromCards();
-          layoutCards();
-          updateStatsAndBuckets();
-          updateHistoryButtons();
-          setStatus("Removed", `${card.name} left the table. Undo can bring it back.`);
+          openRemoveCardModal(card);
         });
         element.addEventListener("dblclick", event => {
           if (event.target.closest(".face-toggle")) return;
@@ -2675,6 +2761,7 @@
         table.querySelectorAll(".bucket-card").forEach(node => node.remove());
         state.bucketEntries = [];
         state.bucketSnapAnchors = [];
+        state.bucketFocusTargets = new Map();
         for (const card of state.cards) {
           if (card.element) card.element.hidden = false;
         }
@@ -2733,6 +2820,7 @@
         element.addEventListener("click", event => {
           event.stopPropagation();
           selectCards([card], card.name);
+          focusBucketCard(card.id);
         });
         element.addEventListener("dblclick", event => {
           event.preventDefault();
@@ -2947,6 +3035,7 @@
         table.querySelectorAll(".category-label, .mana-label, .bucket-card, .zone-note").forEach(node => node.remove());
         state.bucketEntries = [];
         state.bucketSnapAnchors = [];
+        state.bucketFocusTargets = new Map();
         for (const card of state.cards) {
           if (card.element) card.element.hidden = true;
         }
@@ -2983,9 +3072,11 @@
         let maxY = TOP_MM + CARD_MM.height;
         const labels = [];
         const manaLabels = [];
+        const rowWidth = Math.max(CARD_MM.width, ((manaValues.length - 1) * columnStepMm()) + CARD_MM.width);
 
         for (const row of bucketRows) {
           const cards = [...row.cards].sort((a, b) => a.manaValue - b.manaValue || getSortOrder(a) - getSortOrder(b) || a.name.localeCompare(b.name));
+          const rowY = y;
           labels.push({ id: `bucket-${row.id}`, label: row.label, count: cards.length, x: LEFT_MM, y: y - 28 });
           const columns = new Map();
           for (const card of cards) {
@@ -3025,6 +3116,12 @@
               maxY = Math.max(maxY, entryY + CARD_MM.height);
             });
           }
+          state.bucketFocusTargets.set(row.id, {
+            x: LEFT_MM,
+            y: rowY - 34,
+            width: rowWidth,
+            height: CARD_MM.height + ((tallestStack - 1) * STACK_OFFSET_MM) + 54
+          });
           y += CARD_MM.height + ((tallestStack - 1) * STACK_OFFSET_MM) + ROW_GAP_MM + CATEGORY_GAP_MM;
         }
 
@@ -3402,6 +3499,10 @@
 
       function renderColorStats(container, data) {
         container.innerHTML = "";
+        const header = document.createElement("div");
+        header.className = "color-stat color-stat-header";
+        header.innerHTML = "<span></span><span>Needed</span><span>Sources</span>";
+        container.appendChild(header);
         for (const color of COLOR_ORDER) {
           const row = document.createElement("div");
           row.className = "color-stat";
@@ -3517,7 +3618,10 @@
         allButton.addEventListener("click", () => {
           state.activeBucketFilter = "";
           renderBucketControls();
-          if (state.viewMode === "buckets") layoutCards();
+          if (state.viewMode === "buckets") {
+            layoutCards();
+            fitLoadedCards();
+          }
         });
         bucketFilterList.appendChild(allButton);
 
@@ -3531,7 +3635,10 @@
             state.activeBucketFilter = row.id;
             selectCards(row.cards, row.label);
             renderBucketControls();
-            if (state.viewMode === "buckets") layoutCards();
+            if (state.viewMode === "buckets") {
+              layoutCards();
+              focusBucketCategory(row.id);
+            }
           });
           bucketFilterList.appendChild(button);
         }
@@ -3570,6 +3677,7 @@
           row.addEventListener("click", event => {
             if (event.target.closest("button")) return;
             selectCards([card], card.name);
+            focusBucketCard(card.id);
           });
           row.querySelector("button").addEventListener("click", event => {
             event.stopPropagation();
@@ -3579,39 +3687,79 @@
         }
       }
 
+      function appendBucketCheck(bucket, targets, options = {}) {
+        const checkedCount = targets.filter(card => effectiveBucketIds(card).includes(bucket.id)).length;
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = bucket.id;
+        input.checked = options.checked ?? checkedCount === targets.length;
+        input.indeterminate = options.indeterminate ?? (checkedCount > 0 && checkedCount < targets.length);
+        input.dataset.wasIndeterminate = input.indeterminate ? "1" : "";
+        input.addEventListener("change", () => {
+          input.indeterminate = false;
+          input.dataset.wasIndeterminate = "";
+        });
+        label.append(input, document.createTextNode(bucket.label));
+        bucketChecks.appendChild(label);
+        return input;
+      }
+
       function openBucketEditor(cards = selectedCards()) {
         const targets = [...new Set((cards || []).filter(Boolean))];
         if (!targets.length) {
           setStatus("No selection", "Select one or more cards before editing utility buckets.");
           return;
         }
-        state.bucketEditor = { cards: targets };
+        state.bucketEditor = {
+          cards: targets,
+          before: snapshotPositions(),
+          customBucketsBefore: normalizeCustomBuckets(state.customBuckets)
+        };
         bucketModalDetail.textContent = targets.length === 1
           ? targets[0].name
           : `${targets.length} selected cards`;
         bucketChecks.innerHTML = "";
+        newBucketNameInput.value = "";
         for (const bucket of allBucketDefinitions()) {
-          const checkedCount = targets.filter(card => effectiveBucketIds(card).includes(bucket.id)).length;
-          const label = document.createElement("label");
-          const input = document.createElement("input");
-          input.type = "checkbox";
-          input.value = bucket.id;
-          input.checked = checkedCount === targets.length;
-          input.indeterminate = checkedCount > 0 && checkedCount < targets.length;
-          input.dataset.wasIndeterminate = input.indeterminate ? "1" : "";
-          input.addEventListener("change", () => {
-            input.indeterminate = false;
-            input.dataset.wasIndeterminate = "";
-          });
-          label.append(input, document.createTextNode(bucket.label));
-          bucketChecks.appendChild(label);
+          appendBucketCheck(bucket, targets);
         }
         bucketModalBackdrop.hidden = false;
       }
 
-      function closeBucketEditor() {
+      function closeBucketEditor(options = {}) {
+        if (options.restoreCustomBuckets && state.bucketEditor) {
+          state.customBuckets = normalizeCustomBuckets(state.bucketEditor.customBucketsBefore);
+          state.activeBucketFilter = normalizeBucketFilter(state.activeBucketFilter);
+          updateStatsAndBuckets();
+          if (state.viewMode !== "table") layoutCards();
+        }
         state.bucketEditor = null;
         bucketModalBackdrop.hidden = true;
+      }
+
+      function addBucketFromEditor() {
+        const label = cleanBucketName(newBucketNameInput.value);
+        if (!label) {
+          setStatus("No bucket added", "Type a custom bucket name first.");
+          return;
+        }
+        const targets = state.bucketEditor?.cards || [];
+        if (!targets.length) return;
+        const bucket = createCustomBucket(label);
+        newBucketNameInput.value = "";
+        if (!bucket) return;
+        const existingInput = [...bucketChecks.querySelectorAll("input[type='checkbox']")].find(input => input.value === bucket.id);
+        if (existingInput) {
+          existingInput.checked = true;
+          existingInput.indeterminate = false;
+          existingInput.dataset.wasIndeterminate = "";
+        } else {
+          appendBucketCheck(bucket, targets, { checked: true, indeterminate: false });
+        }
+        updateStatsAndBuckets();
+        if (state.viewMode !== "table") layoutCards();
+        setStatus(bucket.existing ? "Bucket selected" : "Bucket added", `${bucket.label} is selected for this edit.`);
       }
 
       function applyBucketEditor(clear = false) {
@@ -3620,7 +3768,7 @@
           closeBucketEditor();
           return;
         }
-        const before = snapshotPositions();
+        const before = state.bucketEditor?.before || snapshotPositions();
         if (clear) {
           for (const card of targets) {
             card.utilityBuckets = [];
@@ -4215,6 +4363,62 @@
         redrawCameraLayout();
       }
 
+      function focusViewportRect() {
+        const controlsRect = controls.getBoundingClientRect();
+        const tabsRect = globalViewTabs.getBoundingClientRect();
+        const left = Math.min(
+          window.innerWidth - 160,
+          controls.classList.contains("collapsed") ? controlsRect.right + 18 : controlsRect.right + 22
+        );
+        const top = Math.max(22, tabsRect.bottom + 18);
+        return {
+          left,
+          top,
+          width: Math.max(180, window.innerWidth - left - 32),
+          height: Math.max(160, window.innerHeight - top - 34)
+        };
+      }
+
+      function focusWorldRect(rect, options = {}) {
+        if (!rect) return;
+        const viewportRect = focusViewportRect();
+        const rectWidthPx = Math.max(1, rect.width * MM_TO_PX);
+        const rectHeightPx = Math.max(1, rect.height * MM_TO_PX);
+        const fitScale = Math.min(
+          (viewportRect.width * 0.86) / rectWidthPx,
+          (viewportRect.height * 0.82) / rectHeightPx
+        );
+        const minScale = options.minScale ?? 0.16;
+        const maxScale = options.maxScale ?? 1.25;
+        const scale = options.fit
+          ? clamp(fitScale, minScale, maxScale)
+          : clamp(Math.max(state.camera.scale, minScale), 0.08, maxScale);
+        state.camera.scale = scale;
+        state.camera.x = Math.round(viewportRect.left + (viewportRect.width - rectWidthPx * scale) / 2 - rect.x * MM_TO_PX * scale);
+        state.camera.y = Math.round(viewportRect.top + (viewportRect.height - rectHeightPx * scale) / 2 - rect.y * MM_TO_PX * scale);
+        redrawCameraLayout();
+      }
+
+      function focusBucketCategory(bucketId) {
+        if (state.viewMode !== "buckets") return;
+        const target = state.bucketFocusTargets.get(bucketId);
+        focusWorldRect(target, { fit: true, minScale: 0.18, maxScale: 1.05 });
+      }
+
+      function focusBucketCard(cardId) {
+        if (state.viewMode !== "buckets") return;
+        const entry = state.bucketEntries.find(item =>
+          item.card.id === cardId && (!state.activeBucketFilter || item.bucketId === state.activeBucketFilter)
+        ) || state.bucketEntries.find(item => item.card.id === cardId);
+        if (!entry) return;
+        focusWorldRect({
+          x: entry.position.x,
+          y: entry.position.y,
+          width: CARD_MM.width,
+          height: CARD_MM.height
+        }, { minScale: 0.82, maxScale: 1.28 });
+      }
+
       function clamp(value, min, max) {
         return Math.max(min, Math.min(max, value));
       }
@@ -4504,6 +4708,7 @@
       function attachControls() {
         togglePanelButton.addEventListener("click", () => {
           const collapsed = controls.classList.toggle("collapsed");
+          document.body.classList.toggle("panel-collapsed", collapsed);
           togglePanelButton.textContent = collapsed ? "+" : "x";
           togglePanelButton.title = collapsed ? "Open menu" : "Collapse menu";
           togglePanelButton.setAttribute("aria-label", collapsed ? "Open menu" : "Collapse menu");
@@ -4527,11 +4732,22 @@
         autoBucketsButton.addEventListener("click", () => applyOracleBuckets({ force: false }));
         addBucketButton.addEventListener("click", promptAddCustomBucket);
         editBucketsButton.addEventListener("click", () => openBucketEditor());
+        createBucketButton.addEventListener("click", addBucketFromEditor);
+        newBucketNameInput.addEventListener("keydown", event => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          addBucketFromEditor();
+        });
         saveBucketsButton.addEventListener("click", () => applyBucketEditor(false));
         clearBucketsButton.addEventListener("click", () => applyBucketEditor(true));
-        cancelBucketsButton.addEventListener("click", closeBucketEditor);
+        cancelBucketsButton.addEventListener("click", () => closeBucketEditor({ restoreCustomBuckets: true }));
         bucketModalBackdrop.addEventListener("pointerdown", event => {
-          if (event.target === bucketModalBackdrop) closeBucketEditor();
+          if (event.target === bucketModalBackdrop) closeBucketEditor({ restoreCustomBuckets: true });
+        });
+        confirmRemoveCardButton.addEventListener("click", confirmRemoveCard);
+        cancelRemoveCardButton.addEventListener("click", closeRemoveCardModal);
+        removeCardModalBackdrop.addEventListener("pointerdown", event => {
+          if (event.target === removeCardModalBackdrop) closeRemoveCardModal();
         });
         importLayoutButton.addEventListener("click", () => importFileInput.click());
         importFileInput.addEventListener("change", () => {
