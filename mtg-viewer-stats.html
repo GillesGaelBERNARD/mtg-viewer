@@ -186,6 +186,11 @@
       transition: none !important;
     }
 
+    #table.is-camera-redrawing .bucket-card,
+    #table.is-camera-redrawing .stats-board {
+      transition: none !important;
+    }
+
     .bucket-card {
       position: absolute;
       width: var(--scaled-card-w);
@@ -200,7 +205,9 @@
     }
 
     .bucket-card:hover,
-    .bucket-card.is-selected {
+    .bucket-card.is-selected,
+    .bucket-card.is-previewing,
+    .bucket-card.is-dragging {
       border-color: rgba(143, 182, 255, 0.88);
       box-shadow:
         0 18px 32px rgba(0, 0, 0, 0.58),
@@ -281,6 +288,11 @@
     }
 
     .card.is-dragging .face-toggle {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .bucket-card.is-dragging .face-toggle {
       opacity: 0;
       pointer-events: none;
     }
@@ -383,6 +395,38 @@
       overflow-wrap: anywhere;
     }
 
+    #global-view-tabs {
+      position: fixed;
+      top: 58px;
+      left: 50%;
+      z-index: 9500;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(92px, 1fr));
+      gap: 6px;
+      transform: translateX(-50%);
+      padding: 6px;
+      border: 1px solid rgba(143, 182, 255, 0.22);
+      border-radius: 8px;
+      background: rgba(13, 19, 29, 0.80);
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
+      backdrop-filter: blur(12px);
+    }
+
+    .view-tab {
+      min-height: 34px;
+      border-radius: 7px;
+      padding: 7px 12px;
+      color: #c8d4e8;
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .view-tab.is-active {
+      border-color: rgba(102, 217, 194, 0.68);
+      background: rgba(35, 104, 100, 0.48);
+      color: #f7fffd;
+    }
+
     #toggle-panel {
       position: absolute;
       right: 8px;
@@ -438,28 +482,6 @@
     .deck-title-display[hidden],
     #deck-title-banner[hidden] {
       display: none;
-    }
-
-    .panel-tabs {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 6px;
-      margin: 12px 0;
-    }
-
-    .panel-tab {
-      min-height: 34px;
-      border-radius: 8px;
-      padding: 7px 8px;
-      color: #c8d4e8;
-      font-size: 12px;
-      font-weight: 760;
-    }
-
-    .panel-tab.is-active {
-      border-color: rgba(102, 217, 194, 0.68);
-      background: rgba(35, 104, 100, 0.48);
-      color: #f7fffd;
     }
 
     .panel-view[hidden] {
@@ -689,15 +711,131 @@
       background: linear-gradient(90deg, var(--accent), var(--accent-2));
     }
 
+    .mana-curve-horizontal {
+      display: flex;
+      align-items: end;
+      gap: 8px;
+      min-height: 140px;
+      overflow-x: auto;
+      padding: 8px 0 2px;
+    }
+
+    .mana-column {
+      min-width: 44px;
+      display: grid;
+      grid-template-rows: 1fr auto auto;
+      align-items: end;
+      justify-items: center;
+      gap: 5px;
+      border: 0;
+      background: transparent;
+      color: #d8e4f4;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .mana-column-bar {
+      width: 28px;
+      min-height: 6px;
+      border-radius: 999px 999px 4px 4px;
+      background: linear-gradient(180deg, #9fd7ff, #66d9c2);
+      box-shadow: 0 0 16px rgba(102, 217, 194, 0.22);
+    }
+
+    .mana-column-count,
+    .mana-column-label {
+      color: #cdd9ea;
+      font-size: 11px;
+      font-weight: 760;
+      line-height: 1;
+    }
+
+    .mana-column-label {
+      color: var(--muted);
+    }
+
     .color-stat {
       display: grid;
-      grid-template-columns: 28px 1fr 1fr;
+      grid-template-columns: 34px 1fr 1fr;
       align-items: center;
       gap: 8px;
       margin: 6px 0;
       color: #d8e4f4;
       font-size: 12px;
       font-weight: 700;
+    }
+
+    .color-dot {
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.34);
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+      color: #10151e;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .color-track {
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .color-fill {
+      display: block;
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+    }
+
+    .stats-board {
+      position: absolute;
+      width: 860px;
+      padding: 20px;
+      border: 1px solid rgba(143, 182, 255, 0.22);
+      border-radius: 8px;
+      background: rgba(13, 19, 29, 0.86);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+      color: #e8f1ff;
+    }
+
+    .stats-board h2,
+    .stats-board h3 {
+      margin: 0;
+      color: #e9f4ff;
+      line-height: 1.15;
+    }
+
+    .stats-board h2 {
+      font-size: 24px;
+    }
+
+    .stats-board h3 {
+      margin-bottom: 10px;
+      font-size: 15px;
+      text-transform: uppercase;
+    }
+
+    .stats-board-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .stats-board-section {
+      padding: 14px;
+      border: 1px solid rgba(143, 182, 255, 0.16);
+      border-radius: 8px;
+      background: rgba(7, 12, 20, 0.55);
+    }
+
+    .stats-board-section.wide {
+      grid-column: 1 / -1;
     }
 
     .bucket-chip-list {
@@ -849,6 +987,11 @@
     <section id="table" aria-label="Movable card table"></section>
   </main>
   <div id="deck-title-banner" hidden></div>
+  <nav id="global-view-tabs" aria-label="Global views">
+    <button class="view-tab is-active" id="tab-list" type="button" data-view="table">Table</button>
+    <button class="view-tab" id="tab-stats" type="button" data-view="stats">Stats</button>
+    <button class="view-tab" id="tab-buckets" type="button" data-view="buckets">Buckets</button>
+  </nav>
 
   <aside id="controls" aria-label="Table controls">
     <button id="toggle-panel" class="icon-button" type="button" title="Collapse menu" aria-label="Collapse menu">x</button>
@@ -857,12 +1000,6 @@
         <h1>MTG Deck Table Viewer</h1>
         <p class="subtle">Import a card list, then move cards around.</p>
         <div id="deck-title-display" class="deck-title-display" hidden></div>
-      </div>
-
-      <div class="panel-tabs" aria-label="Menu sections">
-        <button class="panel-tab is-active" id="tab-list" type="button" data-panel="list">List</button>
-        <button class="panel-tab" id="tab-stats" type="button" data-panel="stats">Stats</button>
-        <button class="panel-tab" id="tab-buckets" type="button" data-panel="buckets">Buckets</button>
       </div>
 
       <section class="panel-view" id="panel-list">
@@ -937,9 +1074,8 @@
       <section class="panel-view" id="panel-buckets" hidden>
         <div class="button-row">
           <button id="auto-buckets" class="primary" type="button">Auto Buckets</button>
+          <button id="add-bucket" type="button">Add Bucket</button>
           <button id="edit-buckets" type="button">Edit Selected</button>
-          <button id="show-table-view" type="button">Table View</button>
-          <button id="show-bucket-view" type="button">Bucket View</button>
         </div>
         <p class="hint-line">Auto buckets use Scryfall Oracle Tags when available, then local text heuristics. Manual edits are saved with the deck.</p>
         <div class="stats-section">
@@ -1006,11 +1142,11 @@
         { id: "other", label: "Other", test: () => true }
       ];
       const COLOR_ORDER = [
-        { id: "W", label: "White", short: "W" },
-        { id: "U", label: "Blue", short: "U" },
-        { id: "B", label: "Black", short: "B" },
-        { id: "R", label: "Red", short: "R" },
-        { id: "G", label: "Green", short: "G" }
+        { id: "W", label: "White", short: "W", color: "#f2e7be", text: "#1d1a12" },
+        { id: "U", label: "Blue", short: "U", color: "#4fa8ff", text: "#061321" },
+        { id: "B", label: "Black", short: "B", color: "#8f8797", text: "#0d0b10" },
+        { id: "R", label: "Red", short: "R", color: "#f05d45", text: "#220805" },
+        { id: "G", label: "Green", short: "G", color: "#3aba6f", text: "#04170d" }
       ];
       const UTILITY_BUCKETS = [
         { id: "ramp", label: "Ramp", match: ["ramp", "mana-dork", "mana-rock", "mana-ritual", "ritual", "treasure", "adds-mana", "cost-reduction", "search-library-land"] },
@@ -1054,9 +1190,11 @@
         snapAnchors: [],
         selectedCardIds: new Set(),
         suppressContextMenu: false,
-        activePanel: "list",
         viewMode: "table",
         activeBucketFilter: "",
+        bucketEntries: [],
+        bucketSnapAnchors: [],
+        customBuckets: [],
         oracleTagIndex: null,
         oracleTagPromise: null,
         bucketEditor: null
@@ -1069,7 +1207,7 @@
       const decklistInput = document.getElementById("decklist");
       const deckTitleDisplay = document.getElementById("deck-title-display");
       const deckTitleBanner = document.getElementById("deck-title-banner");
-      const panelTabs = [...document.querySelectorAll(".panel-tab")];
+      const viewTabs = [...document.querySelectorAll(".view-tab")];
       const panelViews = [...document.querySelectorAll(".panel-view")];
       const loadButton = document.getElementById("load-cards");
       const addCardButton = document.getElementById("add-card");
@@ -1103,9 +1241,8 @@
       const bucketFilterList = document.getElementById("bucket-filter-list");
       const bucketCardList = document.getElementById("bucket-card-list");
       const autoBucketsButton = document.getElementById("auto-buckets");
+      const addBucketButton = document.getElementById("add-bucket");
       const editBucketsButton = document.getElementById("edit-buckets");
-      const showTableViewButton = document.getElementById("show-table-view");
-      const showBucketViewButton = document.getElementById("show-bucket-view");
       const bucketModalBackdrop = document.getElementById("bucket-modal-backdrop");
       const bucketModalDetail = document.getElementById("bucket-modal-detail");
       const bucketChecks = document.getElementById("bucket-checks");
@@ -1168,6 +1305,47 @@
         const title = window.prompt("Deck title (leave blank to clear)", state.deckTitle);
         if (title === null) return;
         setDeckTitle(title);
+      }
+
+      function createCustomBucket(label) {
+        const cleanLabel = cleanBucketName(label);
+        if (!cleanLabel) return null;
+        const existing = allBucketDefinitions().find(bucket => bucket.label.toLowerCase() === cleanLabel.toLowerCase());
+        if (existing) return { ...existing, existing: true };
+        const usedIds = new Set([...allBucketDefinitions().map(bucket => bucket.id), UNBUCKETED_ID]);
+        const bucket = {
+          id: uniqueBucketId(`custom-${bucketSlug(cleanLabel)}`, usedIds),
+          label: cleanLabel,
+          match: []
+        };
+        state.customBuckets = normalizeCustomBuckets([...state.customBuckets, bucket]);
+        return bucket;
+      }
+
+      function promptAddCustomBucket() {
+        const label = window.prompt("Custom utility bucket name");
+        if (label === null) return;
+        const cleanLabel = cleanBucketName(label);
+        if (!cleanLabel) {
+          setStatus("No bucket added", "Enter a name to create a custom utility bucket.");
+          return;
+        }
+        const before = snapshotPositions();
+        const bucket = createCustomBucket(cleanLabel);
+        if (!bucket) {
+          setStatus("No bucket added", "Enter a name to create a custom utility bucket.");
+          return;
+        }
+        state.activeBucketFilter = bucket.id;
+        updateStatsAndBuckets();
+        if (state.viewMode !== "table") layoutCards();
+        if (!bucket.existing) {
+          rememberPositionSnapshot(before);
+          setStatus("Bucket added", `${bucket.label} is ready for manual assignments.`);
+        } else {
+          setStatus("Bucket already exists", `${bucket.label} is selected.`);
+        }
+        updateHistoryButtons();
       }
 
       function typeText(card) {
@@ -1297,14 +1475,64 @@
         return [...new Set(value.map(item => String(item || "").trim()).filter(Boolean))];
       }
 
+      function cleanBucketName(value) {
+        return String(value || "").trim().replace(/\s+/g, " ").slice(0, 48);
+      }
+
+      function bucketSlug(value) {
+        return cleanBucketName(value)
+          .toLowerCase()
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 36) || "bucket";
+      }
+
+      function uniqueBucketId(baseId, usedIds) {
+        const base = String(baseId || "custom-bucket").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "custom-bucket";
+        let id = base.startsWith("custom-") ? base : `custom-${base}`;
+        let suffix = 2;
+        while (usedIds.has(id) || id === UNBUCKETED_ID) {
+          id = `${base}-${suffix}`;
+          if (!id.startsWith("custom-")) id = `custom-${id}`;
+          suffix += 1;
+        }
+        usedIds.add(id);
+        return id;
+      }
+
+      function normalizeCustomBuckets(value) {
+        const usedIds = new Set([...UTILITY_BUCKETS.map(bucket => bucket.id), UNBUCKETED_ID]);
+        const buckets = [];
+        for (const item of Array.isArray(value) ? value : []) {
+          const label = cleanBucketName(typeof item === "string" ? item : item?.label || item?.name || item?.id);
+          if (!label) continue;
+          const preferredId = String(item?.id || `custom-${bucketSlug(label)}`);
+          buckets.push({ id: uniqueBucketId(preferredId, usedIds), label, match: [] });
+        }
+        return buckets;
+      }
+
+      function allBucketDefinitions() {
+        return [...UTILITY_BUCKETS, ...normalizeCustomBuckets(state.customBuckets)];
+      }
+
       function normalizeBucketList(value) {
-        const allowed = new Set(UTILITY_BUCKETS.map(bucket => bucket.id));
+        const allowed = new Set(allBucketDefinitions().map(bucket => bucket.id));
         return normalizeTextArray(value).filter(item => allowed.has(item));
       }
 
       function bucketLabel(id) {
         if (id === UNBUCKETED_ID) return "Unbucketed";
-        return UTILITY_BUCKETS.find(bucket => bucket.id === id)?.label || id;
+        return allBucketDefinitions().find(bucket => bucket.id === id)?.label || id;
+      }
+
+      function normalizeBucketFilter(id) {
+        const value = String(id || "");
+        if (!value) return "";
+        if (value === UNBUCKETED_ID) return UNBUCKETED_ID;
+        return allBucketDefinitions().some(bucket => bucket.id === value) ? value : "";
       }
 
       function oracleText(raw) {
@@ -1608,7 +1836,7 @@
             if (effectiveBucketIds(card).join("|") !== previous) changed++;
           }
           updateStatsAndBuckets();
-          if (state.viewMode === "buckets") layoutCards();
+          if (state.viewMode !== "table") layoutCards();
           if (!silent) {
             setStatus("Buckets updated", `${changed} card${changed === 1 ? "" : "s"} changed from Oracle Tags and text heuristics.`);
           }
@@ -1810,10 +2038,12 @@
           offlineImages: embedImages,
           deckTitle: state.deckTitle,
           decklist: decklistInput.value,
+          customBuckets: normalizeCustomBuckets(state.customBuckets),
           layout: {
             nextOrder: state.nextOrder,
             z: state.z,
             labelsHidden: state.labelsHidden,
+            activeBucketFilter: state.activeBucketFilter,
             camera: { ...state.camera }
           },
           cards
@@ -1983,10 +2213,12 @@
         clearSelection();
         hideSelectionBox();
         const usedIds = new Set();
+        state.customBuckets = normalizeCustomBuckets(bundle.customBuckets);
         state.cards = bundle.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
         state.undoStack = [];
         state.redoStack = [];
         state.labelsHidden = Boolean(bundle.layout?.labelsHidden);
+        state.activeBucketFilter = normalizeBucketFilter(bundle.layout?.activeBucketFilter);
         setDeckTitle(bundle.deckTitle || "", { status: false });
         state.previewCard = null;
         state.nextOrder = Number.isFinite(Number(bundle.layout?.nextOrder))
@@ -2441,9 +2673,15 @@
 
       function clearBucketView() {
         table.querySelectorAll(".bucket-card").forEach(node => node.remove());
+        state.bucketEntries = [];
+        state.bucketSnapAnchors = [];
         for (const card of state.cards) {
           if (card.element) card.element.hidden = false;
         }
+      }
+
+      function clearStatsView() {
+        table.querySelectorAll(".stats-board").forEach(node => node.remove());
       }
 
       function getBucketManaValues(cards) {
@@ -2457,6 +2695,8 @@
       function makeBucketCardReference(card, bucketId) {
         const element = document.createElement("article");
         element.className = "bucket-card";
+        const refId = crypto.randomUUID();
+        element.dataset.refId = refId;
         element.dataset.cardId = card.id;
         element.dataset.bucketId = bucketId;
         element.title = `${card.name} - ${bucketLabel(bucketId)}`;
@@ -2470,6 +2710,23 @@
         } else {
           element.innerHTML = `<div class="placeholder-card"><div><strong>${escapeHtml(card.name)}</strong><span>${escapeHtml(card.error || "Image not available")}</span></div></div>`;
         }
+        if (Array.isArray(card.faces) && card.faces.length > 1) {
+          const toggle = document.createElement("button");
+          toggle.type = "button";
+          toggle.className = "face-toggle";
+          toggle.textContent = String(clampFaceIndex(card) + 1);
+          toggle.title = "Show other side";
+          toggle.addEventListener("pointerdown", event => {
+            event.preventDefault();
+            event.stopPropagation();
+          });
+          toggle.addEventListener("click", event => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (toggleCardFace(card)) layoutCards();
+          });
+          element.appendChild(toggle);
+        }
         element.addEventListener("pointerdown", event => {
           event.stopPropagation();
         });
@@ -2480,20 +2737,233 @@
         element.addEventListener("dblclick", event => {
           event.preventDefault();
           event.stopPropagation();
+          if (toggleCardFace(card)) layoutCards();
+        });
+        element.addEventListener("contextmenu", event => {
+          event.preventDefault();
+          event.stopPropagation();
           openBucketEditor([card]);
         });
+        attachBucketCardDrag(element, card, bucketId, refId);
         return element;
       }
 
+      function bucketAnchorHasEntries(anchor, excludedRefId) {
+        return state.bucketEntries.some(entry =>
+          entry.refId !== excludedRefId &&
+          entry.bucketId === anchor.bucketId &&
+          Math.abs(entry.position.x - anchor.x) <= SNAP_X_MM &&
+          entry.position.y + CARD_MM.height > anchor.y - SNAP_Y_PAD_MM &&
+          entry.position.y < anchor.bottom + SNAP_Y_PAD_MM
+        );
+      }
+
+      function findBucketSnapCandidate(drag, x, y, shiftKey) {
+        if (shiftKey) return null;
+        const probeX = x + CARD_MM.width / 2;
+        const probeY = y + CARD_MM.height / 2;
+        const entries = state.bucketEntries.filter(entry => entry.refId !== drag.refId);
+        let stackCandidate = null;
+        let nearest = null;
+
+        for (const entry of entries) {
+          const xScore = Math.abs(probeX - (entry.position.x + CARD_MM.width / 2)) / SNAP_X_MM;
+          const yScore = Math.abs(probeY - (entry.position.y + CARD_MM.height / 2)) / Math.max(STACK_OFFSET_MM, SNAP_Y_PAD_MM);
+          const score = xScore + yScore * 0.55;
+          if (!nearest || score < nearest.score) nearest = { ...entry, score };
+        }
+
+        if (nearest && Math.abs(probeX - (nearest.position.x + CARD_MM.width / 2)) <= SNAP_X_MM) {
+          const sameColumnEntries = entries
+            .filter(entry => entry.bucketId === nearest.bucketId && Math.abs(entry.position.x - nearest.position.x) <= SNAP_X_MM)
+            .sort((a, b) => a.position.y - b.position.y || getSortOrder(a.card) - getSortOrder(b.card) || a.card.name.localeCompare(b.card.name));
+          const nearestIndex = sameColumnEntries.findIndex(entry => entry.refId === nearest.refId);
+          if (nearestIndex >= 0) {
+            let startIndex = nearestIndex;
+            while (
+              startIndex > 0 &&
+              sameColumnEntries[startIndex].position.y - sameColumnEntries[startIndex - 1].position.y <= STACK_CLUSTER_GAP_MM
+            ) {
+              startIndex--;
+            }
+            let endIndex = nearestIndex;
+            while (
+              endIndex < sameColumnEntries.length - 1 &&
+              sameColumnEntries[endIndex + 1].position.y - sameColumnEntries[endIndex].position.y <= STACK_CLUSTER_GAP_MM
+            ) {
+              endIndex++;
+            }
+            const stackEntries = sameColumnEntries.slice(startIndex, endIndex + 1);
+            const firstPosition = stackEntries[0]?.position;
+            const lastPosition = stackEntries[stackEntries.length - 1]?.position;
+            if (firstPosition && lastPosition) {
+              const minY = firstPosition.y - SNAP_Y_PAD_MM;
+              const maxY = lastPosition.y + CARD_MM.height + SNAP_Y_PAD_MM;
+              if (probeY >= minY && probeY <= maxY) {
+                const stackX = stackEntries.reduce((sum, entry) => sum + entry.position.x, 0) / stackEntries.length;
+                const baseY = firstPosition.y;
+                const index = clamp(Math.round((probeY - baseY - CARD_MM.height / 2) / STACK_OFFSET_MM), 0, stackEntries.length);
+                stackCandidate = {
+                  bucketId: nearest.bucketId,
+                  x: stackX,
+                  y: baseY + index * STACK_OFFSET_MM,
+                  index,
+                  baseY,
+                  score: nearest.score,
+                  stack: stackEntries
+                };
+              }
+            }
+          }
+        }
+
+        let baseCandidate = null;
+        for (const anchor of state.bucketSnapAnchors) {
+          if (bucketAnchorHasEntries(anchor, drag.refId)) continue;
+          const dx = Math.abs(probeX - (anchor.x + CARD_MM.width / 2));
+          const dy = Math.abs(probeY - (anchor.y + CARD_MM.height / 2));
+          if (dx > SNAP_X_MM || dy > CARD_MM.height / 2 + SNAP_Y_PAD_MM) continue;
+          const score = (dx / SNAP_X_MM) + (dy / Math.max(CARD_MM.height / 2, SNAP_Y_PAD_MM)) * 0.55;
+          if (!baseCandidate || score < baseCandidate.score) {
+            baseCandidate = {
+              bucketId: anchor.bucketId,
+              x: anchor.x,
+              y: anchor.y,
+              index: 0,
+              baseY: anchor.y,
+              score,
+              stack: []
+            };
+          }
+        }
+
+        if (stackCandidate && baseCandidate) {
+          return stackCandidate.score <= baseCandidate.score ? stackCandidate : baseCandidate;
+        }
+        return stackCandidate || baseCandidate;
+      }
+
+      function applyBucketSnap(drag, candidate) {
+        const card = drag.card;
+        const targetBucket = candidate.bucketId;
+        const buckets = new Set(effectiveBucketIds(card));
+        if (targetBucket === UNBUCKETED_ID) {
+          buckets.clear();
+        } else {
+          if (drag.sourceBucketId && drag.sourceBucketId !== UNBUCKETED_ID && drag.sourceBucketId !== targetBucket) {
+            buckets.delete(drag.sourceBucketId);
+          }
+          buckets.add(targetBucket);
+        }
+        card.utilityBuckets = normalizeBucketList([...buckets]);
+        card.bucketEdited = true;
+
+        const stackCards = candidate.stack.map(entry => entry.card).filter(item => item.id !== card.id);
+        stackCards.splice(clamp(candidate.index, 0, stackCards.length), 0, card);
+        const baseOrder = state.nextOrder;
+        stackCards.forEach((item, index) => {
+          item.order = baseOrder + index;
+        });
+        state.nextOrder += stackCards.length;
+
+        rememberPositionSnapshot(drag.before);
+        hideSnapGuide();
+        updateStatsAndBuckets();
+        layoutCards();
+        updateHistoryButtons();
+        setStatus("Bucket updated", `${card.name} moved to ${bucketLabel(targetBucket)}.`);
+      }
+
+      function attachBucketCardDrag(element, card, bucketId, refId) {
+        let drag = null;
+        element.addEventListener("pointerdown", event => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          event.stopPropagation();
+          drag = {
+            refId,
+            card,
+            sourceBucketId: bucketId,
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            leftPx: parseFloat(element.style.left || "0"),
+            topPx: parseFloat(element.style.top || "0"),
+            zIndex: element.style.zIndex || "",
+            before: snapshotPositions(),
+            moved: false,
+            snap: null
+          };
+          element.classList.add("is-previewing");
+          element.classList.add("is-dragging");
+          element.style.zIndex = String(++state.z);
+          if (element.setPointerCapture) element.setPointerCapture(event.pointerId);
+          window.addEventListener("pointermove", dragBucketCard);
+          window.addEventListener("pointerup", endBucketCardDrag);
+          window.addEventListener("pointercancel", endBucketCardDrag);
+        });
+
+        function dragBucketCard(event) {
+          if (!drag || event.pointerId !== drag.pointerId) return;
+          const dx = event.clientX - drag.startX;
+          const dy = event.clientY - drag.startY;
+          if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true;
+          const xPx = drag.leftPx + dx;
+          const yPx = drag.topPx + dy;
+          element.style.left = `${xPx}px`;
+          element.style.top = `${yPx}px`;
+          drag.snap = findBucketSnapCandidate(drag, pxToMm(xPx), pxToMm(yPx), event.shiftKey);
+          if (drag.snap) showSnapGuide(drag.snap);
+          else hideSnapGuide();
+        }
+
+        function endBucketCardDrag(event) {
+          if (!drag || event.pointerId !== drag.pointerId) return;
+          if (element.releasePointerCapture && element.hasPointerCapture(event.pointerId)) {
+            element.releasePointerCapture(event.pointerId);
+          }
+          element.classList.remove("is-dragging");
+          window.removeEventListener("pointermove", dragBucketCard);
+          window.removeEventListener("pointerup", endBucketCardDrag);
+          window.removeEventListener("pointercancel", endBucketCardDrag);
+          const shouldApply = drag.moved && drag.snap && !event.shiftKey && event.type !== "pointercancel";
+          if (shouldApply) {
+            applyBucketSnap(drag, drag.snap);
+          } else {
+            hideSnapGuide();
+            element.classList.remove("is-previewing");
+            element.style.zIndex = drag.zIndex;
+            layoutCards();
+            if (!drag.moved && event.type !== "pointercancel") {
+              setStatus("Viewed", `${card.name} returned to its bucket stack layer.`);
+            }
+          }
+          drag = null;
+        }
+      }
+
       function renderBucketView() {
+        clearStatsView();
         table.querySelectorAll(".category-label, .mana-label, .bucket-card, .zone-note").forEach(node => node.remove());
+        state.bucketEntries = [];
+        state.bucketSnapAnchors = [];
         for (const card of state.cards) {
           if (card.element) card.element.hidden = true;
         }
         state.snapAnchors = [];
 
-        const bucketRows = buildBucketRows()
-          .filter(row => !state.activeBucketFilter || row.id === state.activeBucketFilter);
+        if (!state.cards.length) {
+          state.bounds = { x: LEFT_MM, y: TOP_MM, width: CARD_MM.width * 3, height: CARD_MM.height };
+          const note = document.createElement("div");
+          note.className = "zone-note";
+          note.style.left = mm(180);
+          note.style.top = mm(130);
+          note.textContent = "The table is empty.";
+          table.appendChild(note);
+          return { positions: new Map(), labels: [], manaLabels: [], snapAnchors: [], bounds: state.bounds };
+        }
+
+        const bucketRows = buildBucketViewRows();
         if (!bucketRows.length) {
           state.bounds = { x: LEFT_MM, y: TOP_MM, width: CARD_MM.width * 3, height: CARD_MM.height };
           const note = document.createElement("div");
@@ -2505,7 +2975,7 @@
           return { positions: new Map(), labels: [], manaLabels: [], snapAnchors: [], bounds: state.bounds };
         }
 
-        const allCards = state.activeBucketFilter ? cardsByBucket(state.activeBucketFilter) : state.cards;
+        const allCards = state.cards;
         const manaValues = getBucketManaValues(allCards);
         const firstManaValue = manaValues[0] ?? 0;
         let y = TOP_MM;
@@ -2530,12 +3000,29 @@
             manaLabels.push({ category: `bucket-${row.id}`, value: manaValue, x, y: y - 10 });
             maxX = Math.max(maxX, x + CARD_MM.width);
             const stack = columns.get(manaValue) || [];
+            state.bucketSnapAnchors.push({
+              bucketId: row.id,
+              value: manaValue,
+              x,
+              y,
+              bottom: y + CARD_MM.height + ((tallestStack - 1) * STACK_OFFSET_MM) + ROW_GAP_MM,
+              empty: stack.length === 0
+            });
             stack.forEach((card, index) => {
               const element = makeBucketCardReference(card, row.id);
-              setElementPosition(element, x, y + index * STACK_OFFSET_MM);
+              const entryY = y + index * STACK_OFFSET_MM;
+              setElementPosition(element, x, entryY);
               element.style.zIndex = String(40 + index);
               table.appendChild(element);
-              maxY = Math.max(maxY, y + index * STACK_OFFSET_MM + CARD_MM.height);
+              state.bucketEntries.push({
+                refId: element.dataset.refId,
+                bucketId: row.id,
+                card,
+                element,
+                position: { x, y: entryY },
+                manaValue
+              });
+              maxY = Math.max(maxY, entryY + CARD_MM.height);
             });
           }
           y += CARD_MM.height + ((tallestStack - 1) * STACK_OFFSET_MM) + ROW_GAP_MM + CATEGORY_GAP_MM;
@@ -2552,10 +3039,73 @@
         return { positions: new Map(), labels, manaLabels, snapAnchors: [], bounds: state.bounds };
       }
 
+      function renderStatsView() {
+        clearBucketView();
+        table.querySelectorAll(".category-label, .mana-label, .zone-note").forEach(node => node.remove());
+        clearStatsView();
+        for (const card of state.cards) {
+          if (card.element) card.element.hidden = true;
+        }
+        state.snapAnchors = [];
+
+        const data = buildStatsData();
+        const board = document.createElement("section");
+        board.className = "stats-board";
+        board.style.left = mm(LEFT_MM);
+        board.style.top = mm(TOP_MM);
+        board.style.width = mm(360);
+        board.innerHTML = `
+          <h2>${escapeHtml(state.deckTitle || "Deck Stats")}</h2>
+          <div class="stats-grid">
+            ${[
+              ["Cards", data.total],
+              ["Lands", data.lands.length],
+              ["Nonlands", data.nonlands.length],
+              ["Avg MV", data.avgMana]
+            ].map(([label, value]) => `<div class="stat-pill"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`).join("")}
+          </div>
+          <div class="stats-board-grid">
+            <section class="stats-board-section wide">
+              <h3>Mana Curve</h3>
+              <div data-stats-section="mana"></div>
+            </section>
+            <section class="stats-board-section">
+              <h3>Colors</h3>
+              <div data-stats-section="colors"></div>
+            </section>
+            <section class="stats-board-section">
+              <h3>Types</h3>
+              <div data-stats-section="types"></div>
+            </section>
+            <section class="stats-board-section wide">
+              <h3>Utility Buckets</h3>
+              <div data-stats-section="buckets"></div>
+            </section>
+          </div>
+        `;
+        table.appendChild(board);
+        renderManaCurve(board.querySelector("[data-stats-section='mana']"), data.manaRows, { empty: "Load cards to see the mana curve." });
+        renderColorStats(board.querySelector("[data-stats-section='colors']"), data);
+        renderStatRows(board.querySelector("[data-stats-section='types']"), data.typeRows, { empty: "Load cards to see type counts." });
+        renderStatRows(board.querySelector("[data-stats-section='buckets']"), data.bucketRows, { empty: "No buckets yet." });
+
+        state.bounds = {
+          x: LEFT_MM,
+          y: TOP_MM,
+          width: 360,
+          height: 310
+        };
+        return { positions: new Map(), labels: [], manaLabels: [], snapAnchors: [], bounds: state.bounds };
+      }
+
       function layoutCards() {
+        if (state.viewMode === "stats") {
+          return renderStatsView();
+        }
         if (state.viewMode === "buckets") {
           return renderBucketView();
         }
+        clearStatsView();
         clearBucketView();
         const autoCards = state.cards.filter(card => !card.manualPosition);
         const layout = computeLayout(autoCards, state.cards);
@@ -2744,28 +3294,27 @@
         setStatus(label, state.selectedCardIds.size ? `${state.selectedCardIds.size} matching card${state.selectedCardIds.size === 1 ? "" : "s"} selected.` : "No matching cards.");
       }
 
-      function switchPanel(panelId) {
-        state.activePanel = panelId;
-        panelTabs.forEach(tab => tab.classList.toggle("is-active", tab.dataset.panel === panelId));
-        panelViews.forEach(panel => {
-          panel.hidden = panel.id !== `panel-${panelId}`;
-        });
-        if (panelId === "stats" || panelId === "buckets") updateStatsAndBuckets();
-      }
-
       function setViewMode(mode) {
-        state.viewMode = mode === "buckets" ? "buckets" : "table";
-        showTableViewButton.classList.toggle("primary", state.viewMode === "table");
-        showBucketViewButton.classList.toggle("primary", state.viewMode === "buckets");
+        state.viewMode = ["table", "stats", "buckets"].includes(mode) ? mode : "table";
+        viewTabs.forEach(tab => tab.classList.toggle("is-active", tab.dataset.view === state.viewMode));
+        panelViews.forEach(panel => {
+          const targetPanel = state.viewMode === "table" ? "panel-list" : `panel-${state.viewMode}`;
+          panel.hidden = panel.id !== targetPanel;
+        });
         hideSnapGuide();
         hideSelectionBox();
+        updateStatsAndBuckets();
         layoutCards();
         fitLoadedCards();
+        const title = state.viewMode === "table" ? "Table view" : state.viewMode === "stats" ? "Stats view" : "Bucket view";
+        const detail = state.viewMode === "table"
+          ? "Cards are back in the draggable table layout."
+          : state.viewMode === "stats"
+            ? "Deck stats are shown on the table surface."
+            : "Cards are shown on the table surface by utility bucket.";
         setStatus(
-          state.viewMode === "buckets" ? "Bucket view" : "Table view",
-          state.viewMode === "buckets"
-            ? "Cards are shown as utility bucket references. Double-click a reference to edit buckets."
-            : "Cards are back in the draggable table layout."
+          title,
+          detail
         );
       }
 
@@ -2823,6 +3372,49 @@
         }
       }
 
+      function renderManaCurve(container, rows, options = {}) {
+        container.innerHTML = "";
+        if (!rows.length) {
+          const empty = document.createElement("p");
+          empty.className = "hint-line";
+          empty.textContent = options.empty || "No mana data yet.";
+          container.appendChild(empty);
+          return;
+        }
+        const max = Math.max(1, ...rows.map(row => row.count));
+        const curve = document.createElement("div");
+        curve.className = "mana-curve-horizontal";
+        for (const row of rows) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "mana-column";
+          button.title = `${row.label}: ${row.count} card${row.count === 1 ? "" : "s"}`;
+          button.innerHTML = `
+            <span class="mana-column-bar" style="height: ${Math.max(6, (row.count / max) * 112)}px"></span>
+            <span class="mana-column-count">${row.count}</span>
+            <span class="mana-column-label">${escapeHtml(row.label.replace("MV ", ""))}</span>
+          `;
+          button.addEventListener("click", () => selectCards(row.cards, row.label));
+          curve.appendChild(button);
+        }
+        container.appendChild(curve);
+      }
+
+      function renderColorStats(container, data) {
+        container.innerHTML = "";
+        for (const color of COLOR_ORDER) {
+          const row = document.createElement("div");
+          row.className = "color-stat";
+          row.innerHTML = `
+            <span class="color-dot" style="background: ${color.color}; color: ${color.text};">${color.short}</span>
+            <span class="color-track" title="Required pips"><span class="color-fill" style="width: ${data.maxColor ? (data.demand[color.id] / data.maxColor) * 100 : 0}%; background: ${color.color};"></span></span>
+            <span class="color-track" title="Sources"><span class="color-fill" style="width: ${data.maxColor ? (data.sources[color.id] / data.maxColor) * 100 : 0}%; background: ${color.color};"></span></span>
+          `;
+          row.title = `${color.label}: ${data.demand[color.id]} required pips, ${data.sources[color.id]} sources`;
+          container.appendChild(row);
+        }
+      }
+
       function cardsByBucket(bucketId) {
         if (bucketId === UNBUCKETED_ID) {
           return state.cards.filter(card => !effectiveBucketIds(card).length);
@@ -2831,37 +3423,44 @@
       }
 
       function buildBucketRows() {
-        const rows = UTILITY_BUCKETS
-          .map(bucket => ({ id: bucket.id, label: bucket.label, cards: cardsByBucket(bucket.id) }))
-          .filter(row => row.cards.length)
+        const customIds = new Set(normalizeCustomBuckets(state.customBuckets).map(bucket => bucket.id));
+        const rows = allBucketDefinitions()
+          .map(bucket => ({ id: bucket.id, label: bucket.label, cards: cardsByBucket(bucket.id), custom: customIds.has(bucket.id) }))
+          .filter(row => row.cards.length || row.custom)
           .map(row => ({ ...row, count: row.cards.length }));
         const unbucketed = cardsByBucket(UNBUCKETED_ID);
         if (unbucketed.length) rows.push({ id: UNBUCKETED_ID, label: "Unbucketed", count: unbucketed.length, cards: unbucketed });
         return rows.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
       }
 
-      function updateStatsAndBuckets() {
+      function buildBucketViewRows() {
+        const allRows = allBucketDefinitions().map(bucket => {
+          const cards = cardsByBucket(bucket.id);
+          return { id: bucket.id, label: bucket.label, count: cards.length, cards };
+        });
+        const unbucketed = cardsByBucket(UNBUCKETED_ID);
+        if (unbucketed.length || state.activeBucketFilter === UNBUCKETED_ID) {
+          allRows.push({ id: UNBUCKETED_ID, label: "Unbucketed", count: unbucketed.length, cards: unbucketed });
+        }
+        if (state.activeBucketFilter) {
+          return allRows.filter(row => row.id === state.activeBucketFilter);
+        }
+        return allRows;
+      }
+
+      function buildStatsData() {
         const total = state.cards.length;
         const lands = state.cards.filter(card => card.category === "lands");
         const nonlands = state.cards.filter(card => card.category !== "lands");
         const avgMana = nonlands.length
           ? (nonlands.reduce((sum, card) => sum + Number(card.manaValue || 0), 0) / nonlands.length).toFixed(2)
           : "0.00";
-        summaryStats.innerHTML = [
-          ["Cards", total],
-          ["Lands", lands.length],
-          ["Nonlands", nonlands.length],
-          ["Avg MV", avgMana]
-        ].map(([label, value]) => `<div class="stat-pill"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`).join("");
-
         const manaValues = nonlands.map(card => Math.max(0, Number(card.manaValue) || 0));
         const maxMana = Math.max(0, ...manaValues);
         const manaRows = Array.from({ length: maxMana + 1 }, (_, value) => {
           const cards = nonlands.filter(card => Math.max(0, Number(card.manaValue) || 0) === value);
           return { label: `MV ${value}`, count: cards.length, cards };
         });
-        renderStatRows(manaCurveStats, manaRows, { empty: "Load cards to see the mana curve." });
-
         const typeRows = [
           ...CATEGORY_ORDER.map(category => ({
             label: category.label,
@@ -2869,8 +3468,6 @@
           })),
           { label: "Lands", cards: lands }
         ].filter(row => row.cards.length).map(row => ({ ...row, count: row.cards.length }));
-        renderStatRows(typeStats, typeRows, { empty: "Load cards to see type counts." });
-
         const demand = Object.fromEntries(COLOR_ORDER.map(color => [color.id, 0]));
         const sources = Object.fromEntries(COLOR_ORDER.map(color => [color.id, 0]));
         for (const card of state.cards) {
@@ -2879,22 +3476,35 @@
           for (const color of producedManaForCard(card)) sources[color] += 1;
         }
         const maxColor = Math.max(1, ...COLOR_ORDER.flatMap(color => [demand[color.id], sources[color.id]]));
-        colorStats.innerHTML = "";
-        for (const color of COLOR_ORDER) {
-          const row = document.createElement("div");
-          row.className = "color-stat";
-          row.innerHTML = `
-            <span>${color.short}</span>
-            <span class="bar-track" title="Required pips"><span class="bar-fill" style="width: ${(demand[color.id] / maxColor) * 100}%"></span></span>
-            <span class="bar-track" title="Sources"><span class="bar-fill" style="width: ${(sources[color.id] / maxColor) * 100}%"></span></span>
-          `;
-          row.title = `${color.label}: ${demand[color.id]} required pips, ${sources[color.id]} sources`;
-          colorStats.appendChild(row);
-        }
-
         const bucketRows = buildBucketRows();
-        renderStatRows(bucketStats, bucketRows, { empty: "No buckets yet." });
-        renderBucketControls(bucketRows);
+        return {
+          total,
+          lands,
+          nonlands,
+          avgMana,
+          manaRows,
+          typeRows,
+          demand,
+          sources,
+          maxColor,
+          bucketRows
+        };
+      }
+
+      function updateStatsAndBuckets() {
+        const data = buildStatsData();
+        summaryStats.innerHTML = [
+          ["Cards", data.total],
+          ["Lands", data.lands.length],
+          ["Nonlands", data.nonlands.length],
+          ["Avg MV", data.avgMana]
+        ].map(([label, value]) => `<div class="stat-pill"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`).join("");
+
+        renderManaCurve(manaCurveStats, data.manaRows, { empty: "Load cards to see the mana curve." });
+        renderStatRows(typeStats, data.typeRows, { empty: "Load cards to see type counts." });
+        renderColorStats(colorStats, data);
+        renderStatRows(bucketStats, data.bucketRows, { empty: "No buckets yet." });
+        renderBucketControls(data.bucketRows);
       }
 
       function renderBucketControls(bucketRows = buildBucketRows()) {
@@ -2980,7 +3590,7 @@
           ? targets[0].name
           : `${targets.length} selected cards`;
         bucketChecks.innerHTML = "";
-        for (const bucket of UTILITY_BUCKETS) {
+        for (const bucket of allBucketDefinitions()) {
           const checkedCount = targets.filter(card => effectiveBucketIds(card).includes(bucket.id)).length;
           const label = document.createElement("label");
           const input = document.createElement("input");
@@ -3032,7 +3642,7 @@
         rememberPositionSnapshot(before);
         closeBucketEditor();
         updateStatsAndBuckets();
-        if (state.viewMode === "buckets") layoutCards();
+        if (state.viewMode !== "table") layoutCards();
         updateHistoryButtons();
         setStatus("Buckets saved", `${targets.length} card${targets.length === 1 ? "" : "s"} updated.`);
       }
@@ -3623,6 +4233,7 @@
         addCardButton.disabled = isLoading;
         nameDeckButton.disabled = isLoading;
         autoBucketsButton.disabled = isLoading || !state.cards.length;
+        addBucketButton.disabled = isLoading;
         stopButton.disabled = !isLoading;
         updateHistoryButtons();
       }
@@ -3634,6 +4245,8 @@
           labelsHidden: state.labelsHidden,
           deckTitle: state.deckTitle,
           decklist: decklistInput.value,
+          activeBucketFilter: state.activeBucketFilter,
+          customBuckets: normalizeCustomBuckets(state.customBuckets),
           cards: state.cards.map(serializeBoardCard)
         };
       }
@@ -3644,8 +4257,10 @@
         hideSelectionBox();
         table.querySelectorAll(".card").forEach(card => card.remove());
         const usedIds = new Set();
+        state.customBuckets = normalizeCustomBuckets(snapshot.customBuckets);
         state.cards = snapshot.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
         setDeckTitle(snapshot.deckTitle || "", { status: false });
+        state.activeBucketFilter = normalizeBucketFilter(snapshot.activeBucketFilter);
         decklistInput.value = typeof snapshot.decklist === "string" ? snapshot.decklist : state.cards.map(cardDeckLine).join("\n");
         for (const [index, card] of state.cards.entries()) {
           const element = ensureCardElement(card);
@@ -3676,6 +4291,7 @@
         saveLayoutButton.disabled = state.loading || !state.cards.length;
         importLayoutButton.disabled = state.loading;
         autoBucketsButton.disabled = state.loading || !state.cards.length;
+        addBucketButton.disabled = state.loading;
       }
 
       function undoMove() {
@@ -3786,6 +4402,8 @@
         state.abortController?.abort();
         state.abortController = new AbortController();
         state.cards = [];
+        state.customBuckets = [];
+        state.activeBucketFilter = "";
         clearSelection();
         hideSelectionBox();
         state.nextOrder = 1;
@@ -3855,6 +4473,8 @@
       function clearTable() {
         state.abortController?.abort();
         state.cards = [];
+        state.customBuckets = [];
+        state.activeBucketFilter = "";
         clearSelection();
         hideSelectionBox();
         state.nextOrder = 1;
@@ -3891,8 +4511,8 @@
         loadButton.addEventListener("click", loadDeck);
         addCardButton.addEventListener("click", promptAddCard);
         nameDeckButton.addEventListener("click", promptDeckTitle);
-        panelTabs.forEach(tab => {
-          tab.addEventListener("click", () => switchPanel(tab.dataset.panel || "list"));
+        viewTabs.forEach(tab => {
+          tab.addEventListener("click", () => setViewMode(tab.dataset.view || "table"));
         });
         stopButton.addEventListener("click", () => state.abortController?.abort());
         clearButton.addEventListener("click", clearTable);
@@ -3905,9 +4525,8 @@
         resetPositionsButton.addEventListener("click", resetPositions);
         saveLayoutButton.addEventListener("click", saveLayoutBundle);
         autoBucketsButton.addEventListener("click", () => applyOracleBuckets({ force: false }));
+        addBucketButton.addEventListener("click", promptAddCustomBucket);
         editBucketsButton.addEventListener("click", () => openBucketEditor());
-        showTableViewButton.addEventListener("click", () => setViewMode("table"));
-        showBucketViewButton.addEventListener("click", () => setViewMode("buckets"));
         saveBucketsButton.addEventListener("click", () => applyBucketEditor(false));
         clearBucketsButton.addEventListener("click", () => applyBucketEditor(true));
         cancelBucketsButton.addEventListener("click", closeBucketEditor);
@@ -3946,6 +4565,8 @@
       function seedForTests(cards) {
         clearSelection();
         hideSelectionBox();
+        state.customBuckets = normalizeCustomBuckets(cards.customBuckets);
+        state.activeBucketFilter = normalizeBucketFilter(cards.activeBucketFilter);
         state.cards = cards.map((card, index) => ({
           id: card.id || `test-${index}`,
           requestedName: card.name,
@@ -3987,6 +4608,7 @@
         }
         syncDecklistFromCards();
         const layout = layoutCards();
+        updateStatsAndBuckets();
         updateHistoryButtons();
         return layout;
       }
@@ -4000,7 +4622,6 @@
         layoutCards();
         centerTable();
         updateStatsAndBuckets();
-        showTableViewButton.classList.add("primary");
         updateHistoryButtons();
         const params = new URLSearchParams(window.location.search);
         const urlDeck = params.get("deck");
@@ -4019,6 +4640,7 @@
           addCardByName,
           setDeckTitle,
           seedForTests,
+          createCustomBucket,
           createSaveBundle,
           restoreSaveBundle,
           state,
