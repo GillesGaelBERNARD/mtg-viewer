@@ -1632,20 +1632,89 @@
         const structureGroups = groupCards(structureCards);
         const layoutManaValues = getLayoutManaValues(structureCards);
         const firstManaValue = layoutManaValues[0] ?? 1;
+        const activeRows = [];
         const positions = new Map();
         const labels = [];
         const manaLabels = [];
         const snapAnchors = [];
-        let y = TOP_MM;
         let minX = LEFT_MM;
         let maxX = LEFT_MM + CARD_MM.width;
         let maxY = TOP_MM + CARD_MM.height;
         let nonLandMaxX = LEFT_MM + CARD_MM.width;
 
         for (const category of CATEGORY_ORDER) {
-          const group = groups.get(category.id) || [];
           const structureGroup = structureGroups.get(category.id) || [];
           if (!structureGroup.length) continue;
+          activeRows.push({
+            category,
+            group: groups.get(category.id) || [],
+            structureGroup,
+            visualCards: structureGroup.filter(card => !card.manualPosition),
+            baseY: TOP_MM
+          });
+        }
+
+        let provisionalY = TOP_MM;
+        for (const row of activeRows) {
+          row.baseY = provisionalY;
+          const height = Math.max(CARD_MM.height + ROW_GAP_MM, measureCategoryHeight(row.structureGroup, firstManaValue, provisionalY));
+          row.baseBottom = provisionalY + height;
+          provisionalY += height + CATEGORY_GAP_MM;
+        }
+
+        function visualRowForY(topY) {
+          let targetRow = activeRows.find((row, index) => {
+            const nextRow = activeRows[index + 1];
+            const bottom = nextRow ? nextRow.baseY - SNAP_Y_PAD_MM : Infinity;
+            return topY >= row.baseY - SNAP_Y_PAD_MM && topY < bottom;
+          });
+          if (!targetRow) {
+            targetRow = activeRows.reduce((best, row) => {
+              if (!best) return row;
+              return Math.abs(topY - row.baseY) < Math.abs(topY - best.baseY) ? row : best;
+            }, null);
+          }
+          return targetRow;
+        }
+
+        const manualEntries = structureCards
+          .filter(card => card.category !== "lands" && card.manualPosition)
+          .map(card => ({ card, position: getLiveCardPosition(card) || card.manualPosition }))
+          .filter(entry => entry.position)
+          .sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y);
+        const manualClusters = [];
+        for (const entry of manualEntries) {
+          const cluster = manualClusters[manualClusters.length - 1];
+          if (
+            cluster &&
+            Math.abs(entry.position.x - cluster.x) <= SNAP_X_MM &&
+            entry.position.y - cluster.lastY <= STACK_CLUSTER_GAP_MM
+          ) {
+            cluster.entries.push(entry);
+            cluster.lastY = Math.max(cluster.lastY, entry.position.y);
+          } else {
+            manualClusters.push({
+              x: entry.position.x,
+              topY: entry.position.y,
+              lastY: entry.position.y,
+              entries: [entry]
+            });
+          }
+        }
+
+        for (const cluster of manualClusters) {
+          const targetRow = visualRowForY(cluster.topY);
+          if (!targetRow) continue;
+          for (const { card } of cluster.entries) {
+            if (!targetRow.visualCards.some(item => item.id === card.id)) {
+              targetRow.visualCards.push(card);
+            }
+          }
+        }
+
+        let y = TOP_MM;
+        for (const row of activeRows) {
+          const { category, group, structureGroup, visualCards } = row;
           const columns = new Map();
           for (const card of group) {
             const key = card.manaValue;
@@ -1653,10 +1722,11 @@
             columns.get(key).push(card);
           }
           const visualColumns = new Map();
-          for (const card of structureGroup) {
+          for (const card of visualCards) {
             const key = visualColumnIndex(card, firstManaValue);
             visualColumns.set(key, (visualColumns.get(key) || 0) + 1);
           }
+          const categoryHeight = Math.max(CARD_MM.height + ROW_GAP_MM, measureCategoryHeight(visualCards, firstManaValue, y));
           labels.push({ id: category.id, label: category.label, count: structureGroup.length, x: LEFT_MM, y: y - 28 });
 
           for (const manaValue of layoutManaValues) {
@@ -1667,6 +1737,7 @@
               value: manaValue,
               x,
               y,
+              bottom: y + categoryHeight,
               empty: !visualColumns.get(Math.max(0, Math.floor(manaValue) - firstManaValue))
             });
             minX = Math.min(minX, x);
@@ -1680,7 +1751,8 @@
             });
           }
 
-          y += Math.max(CARD_MM.height + ROW_GAP_MM, measureCategoryHeight(structureGroup, firstManaValue, y)) + CATEGORY_GAP_MM;
+          maxY = Math.max(maxY, y + categoryHeight);
+          y += categoryHeight + CATEGORY_GAP_MM;
         }
 
         const lands = groups.get("lands") || [];
@@ -1847,6 +1919,32 @@
         return state.cards.filter(card => state.selectedCardIds.has(card.id));
       }
 
+      function compareCardsByVisibleStackOrder(a, b) {
+        const aPosition = getLiveCardPosition(a) || { x: 0, y: 0 };
+        const bPosition = getLiveCardPosition(b) || { x: 0, y: 0 };
+        return aPosition.y - bPosition.y ||
+          aPosition.x - bPosition.x ||
+          getSortOrder(a) - getSortOrder(b) ||
+          a.name.localeCompare(b.name);
+      }
+
+      function orderedSelectedCards() {
+        return selectedCards().sort(compareCardsByVisibleStackOrder);
+      }
+
+      function selectionAnchorCard(cards) {
+        return [...cards].sort(compareCardsByVisibleStackOrder)[0] || null;
+      }
+
+      function cardElementFromTarget(target) {
+        return target?.closest?.(".card") || null;
+      }
+
+      function targetIsSelectedCard(target) {
+        const cardElement = cardElementFromTarget(target);
+        return Boolean(cardElement && state.selectedCardIds.has(cardElement.dataset.cardId));
+      }
+
       function syncCardSelection(card) {
         if (card.element) {
           card.element.classList.toggle("is-selected", state.selectedCardIds.has(card.id));
@@ -1933,10 +2031,22 @@
         return readElementPosition(card.element) || card.manualPosition || null;
       }
 
-      function findBaseAnchorCandidate(card, probeX, probeY) {
+      function baseAnchorHasCards(anchor, excludedIds) {
+        for (const other of state.cards) {
+          if (excludedIds.has(other.id) || other.category === "lands") continue;
+          const position = getLiveCardPosition(other);
+          if (!position) continue;
+          const sameColumn = Math.abs(position.x - anchor.x) <= SNAP_X_MM;
+          const sameRow = position.y + CARD_MM.height > anchor.y - SNAP_Y_PAD_MM && position.y < (anchor.bottom || Infinity) + SNAP_Y_PAD_MM;
+          if (sameColumn && sameRow) return true;
+        }
+        return false;
+      }
+
+      function findBaseAnchorCandidate(card, probeX, probeY, excludedIds = new Set()) {
         let best = null;
         for (const anchor of state.snapAnchors || []) {
-          if (!anchor.empty) continue;
+          if (baseAnchorHasCards(anchor, excludedIds)) continue;
           const dx = Math.abs(probeX - (anchor.x + CARD_MM.width / 2));
           const dy = Math.abs(probeY - (anchor.y + CARD_MM.height / 2));
           if (dx > SNAP_X_MM || dy > CARD_MM.height / 2 + SNAP_Y_PAD_MM) continue;
@@ -1950,6 +2060,8 @@
               index: 0,
               baseY: anchor.y,
               canonicalColumn: anchor.category === card.category && anchor.value === card.manaValue,
+              category: anchor.category,
+              value: anchor.value,
               score,
               stack: []
             };
@@ -1958,12 +2070,14 @@
         return best;
       }
 
-      function findSnapCandidate(card, x, y, shiftKey) {
+      function findSnapCandidate(card, x, y, shiftKey, excludedIds = new Set()) {
         if (shiftKey) return null;
         const probeX = x + CARD_MM.width / 2;
         const probeY = y + CARD_MM.height / 2;
+        const excluded = new Set(excludedIds);
+        excluded.add(card.id);
         const entries = state.cards
-          .filter(other => canUseSnapAnchor(card, other))
+          .filter(other => canUseSnapAnchor(card, other) && !excluded.has(other.id))
           .map(other => ({ card: other, position: getLiveCardPosition(other) }))
           .filter(entry => entry.position);
 
@@ -2019,6 +2133,8 @@
                   index,
                   baseY,
                   canonicalColumn,
+                  category: nearest.card.category,
+                  value: nearest.card.manaValue,
                   score: nearest.score,
                   stack: stackEntries.map(entry => entry.card)
                 };
@@ -2027,7 +2143,7 @@
           }
         }
 
-        const baseAnchorCandidate = findBaseAnchorCandidate(card, probeX, probeY);
+        const baseAnchorCandidate = findBaseAnchorCandidate(card, probeX, probeY, excluded);
         if (stackCandidate && baseAnchorCandidate) {
           return stackCandidate.score <= baseAnchorCandidate.score ? stackCandidate : baseAnchorCandidate;
         }
@@ -2064,6 +2180,32 @@
         setStatus("Aligned", `${card.name} snapped into a nearby stack. Hold Shift while dropping to place freely.`);
       }
 
+      function applyGroupSnap(drag, candidate) {
+        const movingIds = new Set(drag.cards.map(item => item.card.id));
+        const movingCards = drag.cards.map(item => item.card);
+        const stack = candidate.stack.filter(item => !movingIds.has(item.id));
+        stack.splice(candidate.index, 0, ...movingCards);
+        const cardsToPlace = stack.length ? stack : movingCards;
+        const baseOrder = state.nextOrder;
+        const baseLayer = state.z + 1;
+        cardsToPlace.forEach((item, index) => {
+          item.order = baseOrder + index;
+          item.manualPosition = {
+            x: candidate.x,
+            y: candidate.baseY + index * STACK_OFFSET_MM
+          };
+          const itemElement = ensureCardElement(item);
+          setElementPosition(itemElement, item.manualPosition.x, item.manualPosition.y);
+          itemElement.style.zIndex = String(baseLayer + index);
+        });
+        state.nextOrder += cardsToPlace.length;
+        state.z = baseLayer + cardsToPlace.length;
+        state.labelsHidden = true;
+        hideSnapGuide();
+        layoutCards();
+        setStatus("Aligned", `${movingCards.length} selected cards snapped as an ordered stack.`);
+      }
+
       function attachCardDrag(element, card) {
         let drag = null;
         element.addEventListener("pointerdown", event => {
@@ -2071,7 +2213,8 @@
           event.preventDefault();
           event.stopPropagation();
           const isGroupDrag = state.selectedCardIds.has(card.id) && state.selectedCardIds.size > 1;
-          const dragCards = isGroupDrag ? selectedCards() : [card];
+          const dragCards = isGroupDrag ? orderedSelectedCards() : [card];
+          const anchorCard = isGroupDrag ? selectionAnchorCard(dragCards) : card;
           if (!state.selectedCardIds.has(card.id)) clearSelection();
           clearCardPreview();
           drag = {
@@ -2090,6 +2233,8 @@
               };
             }),
             before: snapshotPositions(),
+            anchorId: anchorCard?.id || card.id,
+            excludedIds: isGroupDrag ? new Set(dragCards.map(item => item.id)) : new Set(),
             group: isGroupDrag,
             moved: false
           };
@@ -2098,7 +2243,13 @@
           }
           for (const item of drag.cards) {
             item.element.classList.add("is-dragging");
-            if (drag.group) item.element.style.zIndex = String(++state.z);
+          }
+          if (drag.group) {
+            const baseLayer = state.z + 1;
+            drag.cards.forEach((item, index) => {
+              item.element.style.zIndex = String(baseLayer + index);
+            });
+            state.z = baseLayer + drag.cards.length;
           }
           if (!drag.group) liftCardForPreview(card, element);
           hideSnapGuide();
@@ -2122,8 +2273,10 @@
             item.card.manualPosition = { x: pxToMm(xPx), y: pxToMm(yPx) };
           }
           if (drag.group) {
-            drag.snap = null;
-            hideSnapGuide();
+            const anchorItem = drag.cards.find(item => item.card.id === drag.anchorId) || drag.cards[0];
+            drag.snap = findSnapCandidate(anchorItem.card, anchorItem.card.manualPosition.x, anchorItem.card.manualPosition.y, event.shiftKey, drag.excludedIds);
+            if (drag.snap) showSnapGuide(drag.snap);
+            else hideSnapGuide();
           } else {
             drag.snap = findSnapCandidate(card, card.manualPosition.x, card.manualPosition.y, event.shiftKey);
             if (drag.snap) showSnapGuide(drag.snap);
@@ -2146,7 +2299,8 @@
           }
           if (drag.snap && !event.shiftKey && event.type !== "pointercancel") {
             commitCardPreview();
-            applySnap(card, drag.snap);
+            if (drag.group) applyGroupSnap(drag, drag.snap);
+            else applySnap(card, drag.snap);
           } else {
             hideSnapGuide();
             if (event.type !== "pointercancel") {
@@ -2669,6 +2823,11 @@
           importFileInput.value = "";
         });
         document.addEventListener("pointerdown", event => {
+          if (state.selectedCardIds.size && !targetIsSelectedCard(event.target)) {
+            if (event.button === 2) suppressNextContextMenu();
+            clearSelection();
+            hideSelectionBox();
+          }
           if (!state.previewCard || event.target.closest(".card")) return;
           clearCardPreview(true);
         }, true);
