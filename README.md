@@ -25,11 +25,21 @@ It replicates manual sorting/viewing of physical cards.
 - Saves and imports `.mtg-viewer.json` bundles containing the decklist, card placement, and Scryfall image URLs, with optional embedded images for offline use.
 - Provides pan, zoom, fit, and center controls for large deck layouts.
 
+`mtg-viewer-stats.html` is an enhanced build that keeps the normal table viewer and adds:
+
+- Stats tabs for deck summary, mana curve, type counts, color demand/sources, and utility bucket counts.
+- Utility Buckets such as Ramp, Card Draw, Removal, Board Wipe, Protection, Tutor, Graveyard, and Lifegain.
+- Automatic bucket suggestions from Scryfall Oracle Tags when available, with local text heuristics as a fallback.
+- Manual per-card or multi-card bucket editing, saved inside exported `.mtg-viewer.json` files.
+- A Bucket View that shows read-only card references grouped by utility bucket, so one card can appear in multiple jobs without becoming a duplicate deck card.
+
 ![Move history controls](screenshots/zoom.png)
 
 ## Usage
 
 Open `mtg-viewer.html` in a browser.
+
+Open `mtg-viewer-stats.html` instead if you want the experimental stats and Utility Buckets view.
 
 Paste a decklist in this format:
 
@@ -72,5 +82,4 @@ Opinionated automated categories (equivalent to one way I layout physical cards 
 
 ## To Dos
 1. Controls for categories
-2. Diverse deck stats visualization
-3. Automated land sorting
+2. Automated land sorting
