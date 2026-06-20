@@ -361,6 +361,7 @@ def audit(cards, decklist_lines):
     counts = {}
     for name in names:
         counts[name] = counts.get(name, 0) + 1
+    ids = [card["id"] for card in cards]
     nonbasic_dupes = {name: count for name, count in counts.items() if count > 1 and name not in BASIC_NAMES}
     basics = {name: counts[name] for name in BASIC_NAMES if name in counts}
     missing_images = [card["name"] for card in cards if not card.get("imageUri")]
@@ -368,7 +369,8 @@ def audit(cards, decklist_lines):
     embedded_faces = sum(1 for card in cards for face in card.get("faces", []) if face.get("imageData"))
     return {
         "cards": len(cards),
-        "decklistLines": decklist_lines,
+        "uniqueCardIds": len(set(ids)),
+        "decklistRows": decklist_lines,
         "uniqueNames": len(counts),
         "nonBasicDuplicates": nonbasic_dupes,
         "basicCounts": basics,
@@ -421,10 +423,7 @@ def main():
             cards.append(viewer_card(f"{len(cards) + 1:03d}", requested, canonical, chosen, order, args.embed_images))
             order += 1
 
-    decklist_lines = []
-    for entry in entries:
-        for _ in range(entry["count"]):
-            decklist_lines.append(f"1 {entry['printed']}")
+    decklist_lines = [f"{entry['count']} {entry['printed']}" for entry in entries]
 
     bundle = {
         "app": "mtg-table-viewer",

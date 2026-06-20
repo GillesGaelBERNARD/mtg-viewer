@@ -38,14 +38,15 @@ Create a viewer save, not just a decklist. Read every physical card visible or i
      - `1 <printed localized title> | lang=<scryfall-lang-code> | name=<canonical English name>`
      - `4 Forest`
    - Prefer `name=` when a localized title is hard to resolve or several cards share words.
+   - Preserve quantity lines in `decklist` (`4 Forest`), but expand `cards[]`; every physical copy must have its own saved card object and unique `id`.
    - Use `--embed-images` when the user wants offline import or when quality matters; this embeds every available non-placeholder card face.
    - Use a clear deck title and save next to the source deck images unless the user gave another destination.
-   - Emit the current viewer save shape: `version: 3`, `customBuckets`, `customTableSections`, `customStatsCategories`, `layout.activeBucketFilter`, `layout.nextBucketOrder`, `layout.showSubtypes`, `layout.activeSubtypeSections`, card colors, mana value, optional `manualManaValue`, mana cost, oracle text/id, produced mana, detected `category`, `tableCategory`, `isCommander`, utility bucket fields, stats-category fields, bucket order, and face data.
+   - Emit the current viewer save shape: `version: 3`, compact quantity `decklist`, `customBuckets`, `customTableSections`, `customStatsCategories`, `layout.activeBucketFilter`, `layout.nextBucketOrder`, `layout.showSubtypes`, `layout.activeSubtypeSections`, card colors, mana value, optional `manualManaValue`, mana cost, oracle text/id, produced mana, detected `category`, `tableCategory`, `isCommander`, utility bucket fields, stats-category fields, bucket order, and face data.
    - Set `manualManaValue: null` unless the user explicitly gives an override. Do not infer overrides from where a physical card sat in a photo.
 
 5. Verify output.
    - Parse the saved JSON.
-   - Confirm `app == "mtg-table-viewer"`, `version == 3`, card count, decklist line count, title, `offlineImages`, embedded image count, embedded face image count, missing images, duplicate report.
+   - Confirm `app == "mtg-table-viewer"`, `version == 3`, card count, unique card ids, compact decklist row count, title, `offlineImages`, embedded image count, embedded face image count, missing images, duplicate report.
    - Optionally import in the viewer or open `mtg-viewer.html` and restore the bundle when layout/visual confidence matters.
    - End with output path and audit facts.
 
