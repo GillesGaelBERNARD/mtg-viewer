@@ -6,6 +6,8 @@ A single-file Magic: The Gathering deck viewer for sorting decks and visualizing
 
 Paste a decklist, get cards images automatically loaded and categorized, visualize the stats, then drag cards around and edit your deck.
 
+It runs fully locally once images are fetched.
+
 ![Loaded table overview](screenshots/overview.png)
 
 ## Features
@@ -39,6 +41,8 @@ Paste a decklist, get cards images automatically loaded and categorized, visuali
 - A Bucket View that shows card references grouped by utility bucket, supports the same inspection/zoom behavior as the table, and lets you drag cards between buckets to edit assignments.
 
 ![Loaded table overview](screenshots/buckets_view.png)
+
+![Loaded table overview](screenshots/edit_buckets_view.png)
 
 ## Usage
 
