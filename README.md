@@ -21,7 +21,6 @@ Paste a decklist, get cards images automatically loaded and categorized, visuali
 - Shows a face switch on double-faced cards so you can view the other side.
 - Lets held cards temporarily rise to the top for inspection, then return to their stack layer on release.
 - Adds/removes individual cards.
-- Asks before removing a card with right-click.
 - Includes Undo, Redo, and Reset Positions controls. Undo stores the last five changes.
 - Saves and imports `.mtg-viewer.json` bundles containing the decklist, card placement, and Scryfall image URLs, with optional embedded images for offline use.
 - Provides pan, zoom, fit, and center controls for large deck layouts.
@@ -45,8 +44,6 @@ Paste a decklist, get cards images automatically loaded and categorized, visuali
 
 Open `mtg-viewer.html` in a browser.
 
-Open `mtg-viewer-stats.html` instead if you want the experimental stats and Utility Buckets view.
-
 Paste a decklist in this format:
 
 ```text
@@ -59,6 +56,7 @@ The viewer loads one visual card per non-empty decklist line. Scryfall fetches a
 
 ## Controls
 
+### Tabletop deck view
 - Drag a card to move it.
 - Use Add Card to append one card to the current table.
 - Right-click a card to remove it after confirmation.
@@ -66,9 +64,15 @@ The viewer loads one visual card per non-empty decklist line. Scryfall fetches a
 - Hold Shift while dropping to place freely without snapping.
 - Hold a card to bring it forward temporarily; release to return it to its stack layer.
 - Use the small face number on double-faced cards, or double-click the card, to flip sides.
+- Hold right-click and draw rectangle to select and move multiple cards.
 - Use Undo, Redo, and Reset Positions to manage manual layout and add/remove changes.
 - Use Save / Export to write a portable table save to your device. Choose whether to embed images for offline imports.
 - Use Import Save to reload a saved decklist, card placement, and either embedded images or Scryfall image URLs.
+
+### Utilitiy buckets views
+
+- To edit buckets: right click on card or move card around
+- Click on card or category in the menu to focus the view
 
 ## Notes
 
@@ -82,10 +86,10 @@ Card data and images are loaded from the public Scryfall API. Magic: The Gatheri
 
 The repo also includes a separate Codex skill at `agent-skills/mtg-viewer-from-deck-images/`. It guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including language-preserving Scryfall images, duplicate audits, offline image embedding, and multi-face card images.
 
-## Limitions
+## Limitations
 
 Opinionated automated categories (equivalent to one way I layout physical cards out to visualize a deck)
 
 ## To Dos
-1. Controls for categories
+1. More controls for categories
 2. Automated land sorting
