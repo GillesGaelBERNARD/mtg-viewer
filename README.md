@@ -13,7 +13,9 @@ It runs fully locally once images are fetched.
 ## Features
 
 3 tabs: Tabletop deck view, Stats, Utility buckets.
+
 Offline mode.
+
 Highly portable: Single file browser app and single file deck save.
 
 ### Automated and interactive tabletop deck view
