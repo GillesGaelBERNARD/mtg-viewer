@@ -2,21 +2,19 @@
 
 Version: v0.3
 
-A single-file Magic: The Gathering deck viewer for sorting decks and visualizing their stats, with automation and intuitive UI.
+A single-file Magic: The Gathering deck viewer for organizing decks and visualizing their stats, with automation and intuitive UI.
 
 Paste a decklist, get cards images automatically loaded and categorized, visualize the stats, then drag cards around and edit your deck.
 
-It runs fully locally once images are fetched.
+It runs fully locally/offline once images are fetched.
+
+Highly portable: single file browser app and single file deck save.
 
 ![Loaded table overview](screenshots/overview.png)
 
 ## Features
 
 3 tabs: Tabletop deck view, Stats, Utility buckets.
-
-Offline mode.
-
-Highly portable: Single file browser app and single file deck save.
 
 ### Automated and interactive tabletop deck view
 - Imports card images from Scryfall by card name.
@@ -41,7 +39,7 @@ Highly portable: Single file browser app and single file deck save.
 
 ### Utility buckets
 - Automated utility Buckets such as Ramp, Card Draw, Removal, Board Wipe, Protection, Tutor, Graveyard, LifeGain, etc. detected from Scryfall Oracle Tags.
-- Custom utility buckets, with manual per-card or multi-card bucket editing.
+- Custom utility Buckets, with manual per-card or multi-card bucket editing.
 - View that shows card references grouped by utility bucket, supports the same inspection/zoom behavior as the table, and lets you drag cards between buckets to edit assignments.
 
 ![Loaded table overview](screenshots/buckets_view.png)
