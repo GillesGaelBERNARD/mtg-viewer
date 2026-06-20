@@ -2,16 +2,17 @@
 
 Version: v0.1
 
-A single-file Magic: The Gathering table viewer for visually sorting a deck by card type and mana value, and move them around as you wish.
+A single-file Magic: The Gathering deck viewer for sorting decks and visualizing their stats, with automation and intuitive UI.
 
-Paste a decklist, get cards images automatically loaded and categorized, then drag cards around on a tabletop.
-
-It replicates manual sorting/viewing of physical cards.
+Paste a decklist, get cards images automatically loaded and categorized, visualize the stats, then drag cards around and edit your deck.
 
 ![Loaded table overview](screenshots/overview.png)
 
 ## Features
 
+3 tabs: Tabletop deck view. Stats. Utility buckets.
+
+### Automated and interactive tabletop deck view
 - Imports card images from Scryfall by card name.
 - Groups cards into creature, vehicle, spacecraft, planeswalker, enchantments/equipment/artifacts, instant/ritual, other, and land areas.
 - Aligns non-land cards by mana value.
@@ -25,16 +26,20 @@ It replicates manual sorting/viewing of physical cards.
 - Saves and imports `.mtg-viewer.json` bundles containing the decklist, card placement, and Scryfall image URLs, with optional embedded images for offline use.
 - Provides pan, zoom, fit, and center controls for large deck layouts.
 
-`mtg-viewer-stats.html` is an enhanced build that keeps the normal table viewer and adds:
+![Move history controls](screenshots/zoom.png)
 
-- Global Table, Stats, and Buckets tabs.
+### Deck stats
 - Stats view for deck summary, horizontal mana curve, type counts, color demand/sources, and utility bucket counts.
+
+![Loaded table overview](screenshots/stats_view.png)
+
+### Utility buckets
 - Utility Buckets such as Ramp, Card Draw, Removal, Board Wipe, Protection, Tutor, Graveyard, and Lifegain.
 - Automatic bucket suggestions from Scryfall Oracle Tags when available, with local text heuristics as a fallback.
 - Custom utility buckets, with manual per-card or multi-card bucket editing saved inside exported `.mtg-viewer.json` files.
 - A Bucket View that shows card references grouped by utility bucket, supports the same inspection/zoom behavior as the table, and lets you drag cards between buckets to edit assignments.
 
-![Move history controls](screenshots/zoom.png)
+![Loaded table overview](screenshots/buckets_view.png)
 
 ## Usage
 
