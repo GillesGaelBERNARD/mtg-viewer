@@ -12,12 +12,15 @@ It runs fully locally once images are fetched.
 
 ## Features
 
-3 tabs: Tabletop deck view. Stats. Utility buckets.
+3 tabs: Tabletop deck view, Stats, Utility buckets.
+Offline mode.
+Highly portable: Single file browser app and single file deck save.
 
 ### Automated and interactive tabletop deck view
 - Imports card images from Scryfall by card name.
 - Groups cards into creature, vehicle, spacecraft, planeswalker, enchantments/equipment/artifacts, instant/ritual, other, and land areas.
 - Aligns non-land cards by mana value.
+- Supports manully overriding the mana value (i.e., for X, XX cards you plan to ideally cast at a given MV)
 - Keeps lands on the right side of the table.
 - Supports free dragging, stack snapping, and between-card insertion while preserving visible stack spacing.
 - Shows a face switch on double-faced cards so you can view the other side.
@@ -35,10 +38,9 @@ It runs fully locally once images are fetched.
 ![Loaded table overview](screenshots/stats_view.png)
 
 ### Utility buckets
-- Utility Buckets such as Ramp, Card Draw, Removal, Board Wipe, Protection, Tutor, Graveyard, and Lifegain.
-- Automatic bucket suggestions from Scryfall Oracle Tags when available, with local text heuristics as a fallback.
-- Custom utility buckets, with manual per-card or multi-card bucket editing saved inside exported `.mtg-viewer.json` files.
-- A Bucket View that shows card references grouped by utility bucket, supports the same inspection/zoom behavior as the table, and lets you drag cards between buckets to edit assignments.
+- Automated utility Buckets such as Ramp, Card Draw, Removal, Board Wipe, Protection, Tutor, Graveyard, LifeGain, etc. detected from Scryfall Oracle Tags.
+- Custom utility buckets, with manual per-card or multi-card bucket editing.
+- View that shows card references grouped by utility bucket, supports the same inspection/zoom behavior as the table, and lets you drag cards between buckets to edit assignments.
 
 ![Loaded table overview](screenshots/buckets_view.png)
 
@@ -58,6 +60,8 @@ Paste a decklist in this format:
 
 The viewer loads one visual card per non-empty decklist line. Scryfall fetches are paced so large lists load steadily instead of hammering the API.
 
+1 click save/import.
+
 ## Controls
 
 ### Tabletop deck view
@@ -75,8 +79,8 @@ The viewer loads one visual card per non-empty decklist line. Scryfall fetches a
 
 ### Utilitiy buckets views
 
-- To edit buckets: right click on card or move card around
-- Click on card or category in the menu to focus the view
+- To edit buckets: right click on card or move card around categories
+- Click on a card or category in the menu to focus the view
 
 ## Notes
 
