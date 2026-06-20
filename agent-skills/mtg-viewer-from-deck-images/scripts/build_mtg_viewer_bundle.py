@@ -28,6 +28,7 @@ BASIC_NAMES = {
 }
 LAST_REQUEST_AT = 0.0
 MIN_REQUEST_INTERVAL = 0.16
+SAVE_VERSION = 2
 
 
 def throttle():
@@ -292,6 +293,26 @@ def category_for(type_line):
     return "other"
 
 
+def color_array(card, key):
+    value = card.get(key) or []
+    if not isinstance(value, list):
+        return []
+    allowed = {"W", "U", "B", "R", "G"}
+    return [item for item in value if item in allowed]
+
+
+def oracle_text(card):
+    if card.get("oracle_text"):
+        return str(card.get("oracle_text") or "")
+    return "\n".join(str(face.get("oracle_text") or "") for face in card.get("card_faces") or [] if face.get("oracle_text"))
+
+
+def mana_cost(card):
+    if card.get("mana_cost"):
+        return str(card.get("mana_cost") or "")
+    return "".join(str(face.get("mana_cost") or "") for face in card.get("card_faces") or [] if face.get("mana_cost"))
+
+
 def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
     card_name = canonical.get("name") or chosen.get("name") or requested
     faces = viewer_faces(chosen, card_name, embed_images)
@@ -311,7 +332,17 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
         "activeFaceIndex": 0,
         "typeLine": type_line,
         "manaValue": int(canonical.get("cmc") or chosen.get("cmc") or 0),
+        "manaCost": mana_cost(canonical) or mana_cost(chosen),
+        "oracleText": oracle_text(canonical) or oracle_text(chosen),
+        "oracleId": canonical.get("oracle_id") or chosen.get("oracle_id") or "",
+        "colors": color_array(canonical, "colors") or color_array(chosen, "colors"),
+        "colorIdentity": color_array(canonical, "color_identity") or color_array(chosen, "color_identity"),
+        "producedMana": color_array(chosen, "produced_mana") or color_array(canonical, "produced_mana"),
         "category": category_for(type_line),
+        "utilityBuckets": [],
+        "autoBuckets": [],
+        "oracleTags": [],
+        "bucketEdited": False,
         "error": "" if image_uri else "Image not found",
         "order": order,
         "initialOrder": order,
@@ -392,15 +423,17 @@ def main():
 
     bundle = {
         "app": "mtg-table-viewer",
-        "version": 1,
+        "version": SAVE_VERSION,
         "savedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
         "offlineImages": bool(args.embed_images),
         "deckTitle": args.title,
         "decklist": "\n".join(decklist_lines),
+        "customBuckets": [],
         "layout": {
             "nextOrder": len(cards) + 1,
             "z": 30 + len(cards),
             "labelsHidden": False,
+            "activeBucketFilter": "",
             "camera": {"x": 0, "y": 0, "scale": 0.84},
         },
         "cards": cards,

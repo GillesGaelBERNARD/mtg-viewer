@@ -18,7 +18,7 @@ Create a viewer save, not just a decklist. Read every physical card visible or i
 
 2. Extract a working decklist.
    - Prefer printed card titles exactly as seen.
-   - Record language per card or pile when non-English: `fr`, `de`, `es`, `it`, `pt`, `ja`, `ko`, `ru`, `zhs`, `zht`.
+   - Record language per card or pile when visible or inferable. Use Scryfall language codes such as `en`, `fr`, `de`, `es`, `it`, `pt`, `ja`, `ko`, `ru`, `zhs`, `zht`.
    - Map localized titles to Scryfall canonical English names for identity, but keep the localized print for images.
    - Expand physical cards into quantities. Repeated basics are normal. Other duplicates are allowed unless the user or format forbids them.
    - For Commander, report duplicate nonbasics; do not silently delete them.
@@ -34,16 +34,17 @@ Create a viewer save, not just a decklist. Read every physical card visible or i
    - Use `scripts/build_mtg_viewer_bundle.py`.
    - Input lines may be:
      - `1 Sol Ring`
-     - `1 Anneau solaire | lang=fr`
-     - `1 Anneau solaire | lang=fr | name=Sol Ring`
+     - `1 <printed localized title> | lang=<scryfall-lang-code>`
+     - `1 <printed localized title> | lang=<scryfall-lang-code> | name=<canonical English name>`
      - `4 Forest`
    - Prefer `name=` when a localized title is hard to resolve or several cards share words.
    - Use `--embed-images` when the user wants offline import or when quality matters; this embeds every available non-placeholder card face.
    - Use a clear deck title and save next to the source deck images unless the user gave another destination.
+   - Emit the current viewer save shape: `version: 2`, `customBuckets`, `layout.activeBucketFilter`, card colors, mana cost, oracle text/id, produced mana, utility bucket fields, and face data.
 
 5. Verify output.
    - Parse the saved JSON.
-   - Confirm `app == "mtg-table-viewer"`, card count, decklist line count, title, `offlineImages`, embedded image count, embedded face image count, missing images, duplicate report.
+   - Confirm `app == "mtg-table-viewer"`, `version == 2`, card count, decklist line count, title, `offlineImages`, embedded image count, embedded face image count, missing images, duplicate report.
    - Optionally import in the viewer or open `mtg-viewer.html` and restore the bundle when layout/visual confidence matters.
    - End with output path and audit facts.
 
@@ -66,7 +67,7 @@ For cards with separate Scryfall face images, export `faces[]`, `activeFaceIndex
 Run:
 
 ```powershell
-python C:\Users\gille\.codex\skills\mtg-viewer-from-deck-images\scripts\build_mtg_viewer_bundle.py `
+python <skill-folder>\scripts\build_mtg_viewer_bundle.py `
   --decklist path\decklist.txt `
   --title "Deck Title" `
   --output path\deck.mtg-viewer.json `
@@ -74,7 +75,7 @@ python C:\Users\gille\.codex\skills\mtg-viewer-from-deck-images\scripts\build_mt
   --embed-images
 ```
 
-Use `--default-lang fr` only when most input titles are printed French and unmarked. Use per-line `lang=` for mixed photos.
+Use `--default-lang <scryfall-lang-code>` only when most input titles share one printed language and unmarked lines should inherit it. Use per-line `lang=` for mixed-language photos. When language is uncertain, prefer per-line evidence over folder/user locale.
 
 ## Done Means
 
