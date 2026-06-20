@@ -1118,6 +1118,11 @@
           <button id="add-bucket" type="button">Add Bucket</button>
           <button id="edit-buckets" type="button">Edit Selected</button>
         </div>
+        <div class="button-row">
+          <button id="undo-buckets" type="button" disabled>Undo</button>
+          <button id="redo-buckets" type="button" disabled>Redo</button>
+          <button id="reset-buckets" type="button" disabled>Reset Buckets</button>
+        </div>
         <p class="hint-line">Auto buckets use Scryfall Oracle Tags when available, then local text heuristics. Manual edits are saved with the deck.</p>
         <div class="stats-section">
           <h2>Bucket Filter</h2>
@@ -1234,8 +1239,11 @@
         lastFetchStartedAt: 0,
         fetchStartTimes: [],
         nextOrder: 1,
+        nextBucketOrder: 1,
         undoStack: [],
         redoStack: [],
+        bucketUndoStack: [],
+        bucketRedoStack: [],
         labelsHidden: false,
         deckTitle: "",
         previewCard: null,
@@ -1280,6 +1288,9 @@
       const undoButton = document.getElementById("undo-move");
       const redoButton = document.getElementById("redo-move");
       const resetPositionsButton = document.getElementById("reset-positions");
+      const undoBucketsButton = document.getElementById("undo-buckets");
+      const redoBucketsButton = document.getElementById("redo-buckets");
+      const resetBucketsButton = document.getElementById("reset-buckets");
       const saveLayoutButton = document.getElementById("save-layout");
       const importLayoutButton = document.getElementById("import-layout");
       const importFileInput = document.getElementById("import-file");
@@ -1395,7 +1406,7 @@
           setStatus("No bucket added", "Enter a name to create a custom utility bucket.");
           return;
         }
-        const before = snapshotPositions();
+        const before = snapshotBucketState();
         const bucket = createCustomBucket(cleanLabel);
         if (!bucket) {
           setStatus("No bucket added", "Enter a name to create a custom utility bucket.");
@@ -1405,7 +1416,7 @@
         updateStatsAndBuckets();
         if (state.viewMode !== "table") layoutCards();
         if (!bucket.existing) {
-          rememberPositionSnapshot(before);
+          rememberBucketSnapshot(before);
           setStatus("Bucket added", `${bucket.label} is ready for manual assignments.`);
         } else {
           setStatus("Bucket already exists", `${bucket.label} is selected.`);
@@ -1721,6 +1732,7 @@
           autoBuckets: [],
           oracleTags: [],
           bucketEdited: false,
+          bucketOrder: 0,
           raw
         };
         refreshHeuristicBuckets(card);
@@ -1885,28 +1897,32 @@
         const silent = Boolean(options.silent);
         const force = Boolean(options.force);
         if (!silent) setStatus("Buckets", "Loading Scryfall Oracle Tags.", null);
+        let index = {};
+        let oracleError = null;
         try {
-          const index = await fetchOracleBucketIndex();
-          let changed = 0;
-          for (const card of state.cards) {
-            const tagBuckets = normalizeBucketList(index[card.oracleId] || []);
-            const heuristicBuckets = bucketIdsFromText(card);
-            const autoBuckets = [...new Set([...heuristicBuckets, ...tagBuckets])];
-            const previous = effectiveBucketIds(card).join("|");
-            card.autoBuckets = autoBuckets;
-            if (force || !card.bucketEdited || !effectiveBucketIds(card).length) {
-              card.utilityBuckets = [...autoBuckets];
-              if (force) card.bucketEdited = false;
-            }
-            if (effectiveBucketIds(card).join("|") !== previous) changed++;
-          }
-          updateStatsAndBuckets();
-          if (state.viewMode !== "table") layoutCards();
-          if (!silent) {
-            setStatus("Buckets updated", `${changed} card${changed === 1 ? "" : "s"} changed from Oracle Tags and text heuristics.`);
-          }
+          index = await fetchOracleBucketIndex();
         } catch (error) {
-          if (!silent) setStatus("Buckets unavailable", error.message || "Scryfall Oracle Tags could not be loaded.");
+          oracleError = error;
+        }
+        let changed = 0;
+        for (const card of state.cards) {
+          const tagBuckets = normalizeBucketList(index[card.oracleId] || []);
+          const heuristicBuckets = bucketIdsFromText(card);
+          const preservedBuckets = oracleError ? normalizeBucketList(card.autoBuckets) : [];
+          const autoBuckets = [...new Set([...heuristicBuckets, ...tagBuckets, ...preservedBuckets])];
+          const previous = effectiveBucketIds(card).join("|");
+          card.autoBuckets = autoBuckets;
+          if (force || !card.bucketEdited || !effectiveBucketIds(card).length) {
+            card.utilityBuckets = [...autoBuckets];
+            if (force) card.bucketEdited = false;
+          }
+          if (effectiveBucketIds(card).join("|") !== previous) changed++;
+        }
+        updateStatsAndBuckets();
+        if (state.viewMode !== "table") layoutCards();
+        if (!silent) {
+          const source = oracleError ? "local text heuristics" : "Oracle Tags and text heuristics";
+          setStatus("Buckets updated", `${changed} card${changed === 1 ? "" : "s"} changed from ${source}.`);
         }
       }
 
@@ -2106,6 +2122,7 @@
           customBuckets: normalizeCustomBuckets(state.customBuckets),
           layout: {
             nextOrder: state.nextOrder,
+            nextBucketOrder: state.nextBucketOrder,
             z: state.z,
             labelsHidden: state.labelsHidden,
             activeBucketFilter: state.activeBucketFilter,
@@ -2256,6 +2273,7 @@
           bucketEdited: Boolean(saved.bucketEdited),
           order: Number.isFinite(Number(saved.order)) ? Number(saved.order) : index + 1,
           initialOrder: Number.isFinite(Number(saved.initialOrder)) ? Number(saved.initialOrder) : index + 1,
+          bucketOrder: Number.isFinite(Number(saved.bucketOrder)) ? Number(saved.bucketOrder) : Number.isFinite(Number(saved.order)) ? Number(saved.order) : index + 1,
           importedZIndex: String(saved.zIndex || "")
         };
         if (saved.manualPosition && Number.isFinite(Number(saved.manualPosition.x)) && Number.isFinite(Number(saved.manualPosition.y))) {
@@ -2282,6 +2300,8 @@
         state.cards = bundle.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
         state.undoStack = [];
         state.redoStack = [];
+        state.bucketUndoStack = [];
+        state.bucketRedoStack = [];
         state.labelsHidden = Boolean(bundle.layout?.labelsHidden);
         state.activeBucketFilter = normalizeBucketFilter(bundle.layout?.activeBucketFilter);
         setDeckTitle(bundle.deckTitle || "", { status: false });
@@ -2289,6 +2309,9 @@
         state.nextOrder = Number.isFinite(Number(bundle.layout?.nextOrder))
           ? Number(bundle.layout.nextOrder)
           : Math.max(1, ...state.cards.map(card => Number(card.order) || 0)) + 1;
+        state.nextBucketOrder = Number.isFinite(Number(bundle.layout?.nextBucketOrder))
+          ? Number(bundle.layout.nextBucketOrder)
+          : Math.max(1, ...state.cards.map(card => Number(card.bucketOrder) || 0)) + 1;
         state.z = Number.isFinite(Number(bundle.layout?.z))
           ? Number(bundle.layout.z)
           : Math.max(30, ...state.cards.map(card => Number(card.importedZIndex) || 30));
@@ -2353,6 +2376,7 @@
           autoBuckets: [],
           oracleTags: [],
           bucketEdited: false,
+          bucketOrder: 0,
           error: message || "Image not found"
         };
       }
@@ -2396,6 +2420,7 @@
           error: card.error || "",
           order: card.order,
           initialOrder: card.initialOrder,
+          bucketOrder: Number.isFinite(Number(card.bucketOrder)) ? Number(card.bucketOrder) : card.order,
           manualPosition: card.manualPosition ? { ...card.manualPosition } : null,
           zIndex: card.element ? card.element.style.zIndex : ""
         };
@@ -2420,11 +2445,11 @@
           return;
         }
         clearCardPreview();
-        const before = snapshotPositions();
+        const before = snapshotTableState();
         state.cards = state.cards.filter(item => item.id !== card.id);
         state.selectedCardIds.delete(card.id);
         card.element?.remove();
-        rememberPositionSnapshot(before);
+        rememberTableSnapshot(before);
         syncDecklistFromCards();
         layoutCards();
         updateStatsAndBuckets();
@@ -2552,6 +2577,10 @@
 
       function getSortOrder(card) {
         return Number.isFinite(card.order) ? card.order : 0;
+      }
+
+      function getBucketSortOrder(card) {
+        return Number.isFinite(Number(card.bucketOrder)) ? Number(card.bucketOrder) : getSortOrder(card);
       }
 
       function manaColumnX(manaValue, firstManaValue = 1) {
@@ -2864,7 +2893,7 @@
         if (nearest && Math.abs(probeX - (nearest.position.x + CARD_MM.width / 2)) <= SNAP_X_MM) {
           const sameColumnEntries = entries
             .filter(entry => entry.bucketId === nearest.bucketId && Math.abs(entry.position.x - nearest.position.x) <= SNAP_X_MM)
-            .sort((a, b) => a.position.y - b.position.y || getSortOrder(a.card) - getSortOrder(b.card) || a.card.name.localeCompare(b.card.name));
+            .sort((a, b) => a.position.y - b.position.y || getBucketSortOrder(a.card) - getBucketSortOrder(b.card) || a.card.name.localeCompare(b.card.name));
           const nearestIndex = sameColumnEntries.findIndex(entry => entry.refId === nearest.refId);
           if (nearestIndex >= 0) {
             let startIndex = nearestIndex;
@@ -2948,13 +2977,13 @@
 
         const stackCards = candidate.stack.map(entry => entry.card).filter(item => item.id !== card.id);
         stackCards.splice(clamp(candidate.index, 0, stackCards.length), 0, card);
-        const baseOrder = state.nextOrder;
+        const baseOrder = state.nextBucketOrder;
         stackCards.forEach((item, index) => {
-          item.order = baseOrder + index;
+          item.bucketOrder = baseOrder + index;
         });
-        state.nextOrder += stackCards.length;
+        state.nextBucketOrder += stackCards.length;
 
-        rememberPositionSnapshot(drag.before);
+        rememberBucketSnapshot(drag.before);
         hideSnapGuide();
         updateStatsAndBuckets();
         layoutCards();
@@ -2978,7 +3007,7 @@
             leftPx: parseFloat(element.style.left || "0"),
             topPx: parseFloat(element.style.top || "0"),
             zIndex: element.style.zIndex || "",
-            before: snapshotPositions(),
+            before: snapshotBucketState(),
             moved: false,
             snap: null
           };
@@ -3075,7 +3104,7 @@
         const rowWidth = Math.max(CARD_MM.width, ((manaValues.length - 1) * columnStepMm()) + CARD_MM.width);
 
         for (const row of bucketRows) {
-          const cards = [...row.cards].sort((a, b) => a.manaValue - b.manaValue || getSortOrder(a) - getSortOrder(b) || a.name.localeCompare(b.name));
+          const cards = [...row.cards].sort((a, b) => a.manaValue - b.manaValue || getBucketSortOrder(a) - getBucketSortOrder(b) || a.name.localeCompare(b.name));
           const rowY = y;
           labels.push({ id: `bucket-${row.id}`, label: row.label, count: cards.length, x: LEFT_MM, y: y - 28 });
           const columns = new Map();
@@ -3661,6 +3690,7 @@
         const sorted = [...cards].sort((a, b) =>
           a.manaValue - b.manaValue ||
           categoryLabel(a.category).localeCompare(categoryLabel(b.category)) ||
+          getBucketSortOrder(a) - getBucketSortOrder(b) ||
           a.name.localeCompare(b.name)
         );
         for (const card of sorted) {
@@ -3713,7 +3743,7 @@
         }
         state.bucketEditor = {
           cards: targets,
-          before: snapshotPositions(),
+          before: snapshotBucketState(),
           customBucketsBefore: normalizeCustomBuckets(state.customBuckets)
         };
         bucketModalDetail.textContent = targets.length === 1
@@ -3768,7 +3798,7 @@
           closeBucketEditor();
           return;
         }
-        const before = state.bucketEditor?.before || snapshotPositions();
+        const before = state.bucketEditor?.before || snapshotBucketState();
         if (clear) {
           for (const card of targets) {
             card.utilityBuckets = [];
@@ -3787,7 +3817,7 @@
             card.bucketEdited = true;
           }
         }
-        rememberPositionSnapshot(before);
+        rememberBucketSnapshot(before);
         closeBucketEditor();
         updateStatsAndBuckets();
         if (state.viewMode !== "table") layoutCards();
@@ -4066,7 +4096,7 @@
                 manualBefore: item.manualPosition ? { ...item.manualPosition } : null
               };
             }),
-            before: snapshotPositions(),
+            before: snapshotTableState(),
             anchorId: anchorCard?.id || card.id,
             excludedIds: isGroupDrag ? new Set(dragCards.map(item => item.id)) : new Set(),
             group: isGroupDrag,
@@ -4129,7 +4159,7 @@
           window.removeEventListener("pointercancel", endCardDrag);
           const shouldRecord = drag.moved && event.type !== "pointercancel";
           if (shouldRecord) {
-            rememberPositionSnapshot(drag.before);
+            rememberTableSnapshot(drag.before);
           }
           if (drag.snap && !event.shiftKey && event.type !== "pointercancel") {
             commitCardPreview();
@@ -4442,29 +4472,52 @@
         updateHistoryButtons();
       }
 
-      function snapshotPositions() {
+      function cardBucketState(card) {
+        return {
+          utilityBuckets: normalizeBucketList(card.utilityBuckets),
+          autoBuckets: normalizeBucketList(card.autoBuckets),
+          oracleTags: normalizeTextArray(card.oracleTags),
+          bucketEdited: Boolean(card.bucketEdited),
+          bucketOrder: Number.isFinite(Number(card.bucketOrder)) ? Number(card.bucketOrder) : getSortOrder(card)
+        };
+      }
+
+      function applyCardBucketState(card, bucketState) {
+        if (!card || !bucketState) return;
+        card.utilityBuckets = normalizeBucketList(bucketState.utilityBuckets);
+        card.autoBuckets = normalizeBucketList(bucketState.autoBuckets);
+        card.oracleTags = normalizeTextArray(bucketState.oracleTags);
+        card.bucketEdited = Boolean(bucketState.bucketEdited);
+        card.bucketOrder = Number.isFinite(Number(bucketState.bucketOrder)) ? Number(bucketState.bucketOrder) : getSortOrder(card);
+      }
+
+      function currentBucketStateById() {
+        return new Map(state.cards.map(card => [card.id, cardBucketState(card)]));
+      }
+
+      function snapshotTableState() {
         return {
           nextOrder: state.nextOrder,
           z: state.z,
           labelsHidden: state.labelsHidden,
           deckTitle: state.deckTitle,
           decklist: decklistInput.value,
-          activeBucketFilter: state.activeBucketFilter,
-          customBuckets: normalizeCustomBuckets(state.customBuckets),
           cards: state.cards.map(serializeBoardCard)
         };
       }
 
-      function restorePositions(snapshot) {
+      function restoreTableState(snapshot) {
         state.previewCard = null;
         clearSelection();
         hideSelectionBox();
         table.querySelectorAll(".card").forEach(card => card.remove());
         const usedIds = new Set();
-        state.customBuckets = normalizeCustomBuckets(snapshot.customBuckets);
+        const currentBuckets = currentBucketStateById();
         state.cards = snapshot.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
+        for (const card of state.cards) {
+          applyCardBucketState(card, currentBuckets.get(card.id));
+        }
         setDeckTitle(snapshot.deckTitle || "", { status: false });
-        state.activeBucketFilter = normalizeBucketFilter(snapshot.activeBucketFilter);
         decklistInput.value = typeof snapshot.decklist === "string" ? snapshot.decklist : state.cards.map(cardDeckLine).join("\n");
         for (const [index, card] of state.cards.entries()) {
           const element = ensureCardElement(card);
@@ -4473,6 +4526,7 @@
           renderCardImage(card);
         }
         state.nextOrder = snapshot.nextOrder;
+        state.nextBucketOrder = Math.max(state.nextBucketOrder, ...state.cards.map(card => Number(card.bucketOrder) || 0)) + 1;
         state.z = snapshot.z;
         state.labelsHidden = Boolean(snapshot.labelsHidden);
         hideSnapGuide();
@@ -4481,10 +4535,42 @@
         updateHistoryButtons();
       }
 
-      function rememberPositionSnapshot(snapshot) {
+      function snapshotBucketState() {
+        return {
+          customBuckets: normalizeCustomBuckets(state.customBuckets),
+          activeBucketFilter: state.activeBucketFilter,
+          nextBucketOrder: state.nextBucketOrder,
+          cards: state.cards.map(card => ({ id: card.id, ...cardBucketState(card) }))
+        };
+      }
+
+      function restoreBucketState(snapshot) {
+        const bucketsById = new Map((snapshot.cards || []).map(card => [card.id, card]));
+        state.customBuckets = normalizeCustomBuckets(snapshot.customBuckets);
+        state.activeBucketFilter = normalizeBucketFilter(snapshot.activeBucketFilter);
+        state.nextBucketOrder = Number.isFinite(Number(snapshot.nextBucketOrder))
+          ? Number(snapshot.nextBucketOrder)
+          : Math.max(1, ...state.cards.map(card => Number(card.bucketOrder) || 0)) + 1;
+        for (const card of state.cards) {
+          applyCardBucketState(card, bucketsById.get(card.id));
+        }
+        hideSnapGuide();
+        updateStatsAndBuckets();
+        if (state.viewMode !== "table") layoutCards();
+        updateHistoryButtons();
+      }
+
+      function rememberTableSnapshot(snapshot) {
         state.undoStack.push(snapshot);
         if (state.undoStack.length > HISTORY_LIMIT) state.undoStack.shift();
         state.redoStack = [];
+        updateHistoryButtons();
+      }
+
+      function rememberBucketSnapshot(snapshot) {
+        state.bucketUndoStack.push(snapshot);
+        if (state.bucketUndoStack.length > HISTORY_LIMIT) state.bucketUndoStack.shift();
+        state.bucketRedoStack = [];
         updateHistoryButtons();
       }
 
@@ -4492,6 +4578,9 @@
         undoButton.disabled = state.undoStack.length === 0;
         redoButton.disabled = state.redoStack.length === 0;
         resetPositionsButton.disabled = !state.cards.some(card => card.manualPosition) && !state.labelsHidden;
+        undoBucketsButton.disabled = state.bucketUndoStack.length === 0;
+        redoBucketsButton.disabled = state.bucketRedoStack.length === 0;
+        resetBucketsButton.disabled = state.loading || !state.cards.length;
         saveLayoutButton.disabled = state.loading || !state.cards.length;
         importLayoutButton.disabled = state.loading;
         autoBucketsButton.disabled = state.loading || !state.cards.length;
@@ -4501,25 +4590,66 @@
       function undoMove() {
         const previous = state.undoStack.pop();
         if (!previous) return;
-        state.redoStack.push(snapshotPositions());
+        state.redoStack.push(snapshotTableState());
         if (state.redoStack.length > HISTORY_LIMIT) state.redoStack.shift();
-        restorePositions(previous);
+        restoreTableState(previous);
         setStatus("Undone", "Restored the previous table position.");
       }
 
       function redoMove() {
         const next = state.redoStack.pop();
         if (!next) return;
-        state.undoStack.push(snapshotPositions());
+        state.undoStack.push(snapshotTableState());
         if (state.undoStack.length > HISTORY_LIMIT) state.undoStack.shift();
-        restorePositions(next);
+        restoreTableState(next);
         setStatus("Redone", "Reapplied the table position.");
+      }
+
+      function undoBuckets() {
+        const previous = state.bucketUndoStack.pop();
+        if (!previous) return;
+        state.bucketRedoStack.push(snapshotBucketState());
+        if (state.bucketRedoStack.length > HISTORY_LIMIT) state.bucketRedoStack.shift();
+        restoreBucketState(previous);
+        setStatus("Buckets undone", "Restored the previous utility bucket assignments.");
+      }
+
+      function redoBuckets() {
+        const next = state.bucketRedoStack.pop();
+        if (!next) return;
+        state.bucketUndoStack.push(snapshotBucketState());
+        if (state.bucketUndoStack.length > HISTORY_LIMIT) state.bucketUndoStack.shift();
+        restoreBucketState(next);
+        setStatus("Buckets redone", "Reapplied the utility bucket assignments.");
+      }
+
+      async function autoBucketWithHistory(options = {}) {
+        if (!state.cards.length) return;
+        const before = snapshotBucketState();
+        await applyOracleBuckets(options);
+        rememberBucketSnapshot(before);
+      }
+
+      async function resetBucketsToAuto() {
+        if (!state.cards.length) return;
+        const before = snapshotBucketState();
+        await applyOracleBuckets({ force: true });
+        state.nextBucketOrder = 1;
+        [...state.cards]
+          .sort((a, b) => (Number(a.initialOrder) || Number(a.order) || 0) - (Number(b.initialOrder) || Number(b.order) || 0))
+          .forEach(card => {
+            card.bucketOrder = state.nextBucketOrder++;
+          });
+        rememberBucketSnapshot(before);
+        updateStatsAndBuckets();
+        if (state.viewMode !== "table") layoutCards();
+        setStatus("Buckets reset", "Utility buckets were restored to the automated sorting.");
       }
 
       function resetPositions() {
         if (!state.cards.length) return;
         clearCardPreview();
-        rememberPositionSnapshot(snapshotPositions());
+        rememberTableSnapshot(snapshotTableState());
         state.labelsHidden = false;
         state.nextOrder = 1;
         for (const [index, card] of state.cards.entries()) {
@@ -4542,7 +4672,7 @@
         }
 
         clearCardPreview();
-        const before = recordHistory ? snapshotPositions() : null;
+        const before = recordHistory ? snapshotTableState() : null;
         setLoading(true);
         state.abortController?.abort();
         state.abortController = new AbortController();
@@ -4573,13 +4703,16 @@
         if (!Number.isFinite(card.initialOrder)) {
           card.initialOrder = card.order;
         }
+        if (!Number.isFinite(Number(card.bucketOrder)) || Number(card.bucketOrder) <= 0) {
+          card.bucketOrder = state.nextBucketOrder++;
+        }
         state.cards.push(card);
         const element = ensureCardElement(card);
         element.style.zIndex = String(++state.z);
         layoutCards();
         await cacheCardImages(card);
         renderCardImage(card);
-        if (recordHistory && before) rememberPositionSnapshot(before);
+        if (recordHistory && before) rememberTableSnapshot(before);
         syncDecklistFromCards();
         updateStatsAndBuckets();
         updateHistoryButtons();
@@ -4611,8 +4744,11 @@
         clearSelection();
         hideSelectionBox();
         state.nextOrder = 1;
+        state.nextBucketOrder = 1;
         state.undoStack = [];
         state.redoStack = [];
+        state.bucketUndoStack = [];
+        state.bucketRedoStack = [];
         state.labelsHidden = false;
         state.previewCard = null;
         state.lastFetchStartedAt = 0;
@@ -4642,6 +4778,9 @@
           }
           if (!Number.isFinite(card.initialOrder)) {
             card.initialOrder = card.order;
+          }
+          if (!Number.isFinite(Number(card.bucketOrder)) || Number(card.bucketOrder) <= 0) {
+            card.bucketOrder = state.nextBucketOrder++;
           }
           state.cards.push(card);
           const element = ensureCardElement(card);
@@ -4682,8 +4821,11 @@
         clearSelection();
         hideSelectionBox();
         state.nextOrder = 1;
+        state.nextBucketOrder = 1;
         state.undoStack = [];
         state.redoStack = [];
+        state.bucketUndoStack = [];
+        state.bucketRedoStack = [];
         state.labelsHidden = false;
         state.previewCard = null;
         setDeckTitle("", { status: false });
@@ -4729,7 +4871,10 @@
         redoButton.addEventListener("click", redoMove);
         resetPositionsButton.addEventListener("click", resetPositions);
         saveLayoutButton.addEventListener("click", saveLayoutBundle);
-        autoBucketsButton.addEventListener("click", () => applyOracleBuckets({ force: false }));
+        autoBucketsButton.addEventListener("click", () => autoBucketWithHistory({ force: false }));
+        undoBucketsButton.addEventListener("click", undoBuckets);
+        redoBucketsButton.addEventListener("click", redoBuckets);
+        resetBucketsButton.addEventListener("click", resetBucketsToAuto);
         addBucketButton.addEventListener("click", promptAddCustomBucket);
         editBucketsButton.addEventListener("click", () => openBucketEditor());
         createBucketButton.addEventListener("click", addBucketFromEditor);
@@ -4808,13 +4953,17 @@
           bucketEdited: Boolean(card.bucketEdited),
           category: categorize(card),
           order: Number.isFinite(card.order) ? card.order : index + 1,
-          initialOrder: Number.isFinite(card.initialOrder) ? card.initialOrder : index + 1
+          initialOrder: Number.isFinite(card.initialOrder) ? card.initialOrder : index + 1,
+          bucketOrder: Number.isFinite(Number(card.bucketOrder)) ? Number(card.bucketOrder) : Number.isFinite(card.order) ? card.order : index + 1
         }));
         state.cards.forEach(syncActiveFaceFields);
         state.cards.forEach(refreshHeuristicBuckets);
         state.nextOrder = state.cards.length + 1;
+        state.nextBucketOrder = Math.max(1, ...state.cards.map(card => Number(card.bucketOrder) || 0)) + 1;
         state.undoStack = [];
         state.redoStack = [];
+        state.bucketUndoStack = [];
+        state.bucketRedoStack = [];
         state.labelsHidden = false;
         state.previewCard = null;
         table.querySelectorAll(".card").forEach(card => card.remove());
