@@ -3984,6 +3984,52 @@
         return readElementPosition(card.element) || card.manualPosition || null;
       }
 
+      function tableCategoryRows() {
+        const rows = new Map();
+        for (const anchor of state.snapAnchors || []) {
+          if (!anchor.category || anchor.category === "lands") continue;
+          const row = rows.get(anchor.category) || {
+            category: anchor.category,
+            y: anchor.y,
+            bottom: anchor.bottom || anchor.y + CARD_MM.height
+          };
+          row.y = Math.min(row.y, anchor.y);
+          row.bottom = Math.max(row.bottom, anchor.bottom || anchor.y + CARD_MM.height);
+          rows.set(anchor.category, row);
+        }
+        return [...rows.values()].sort((a, b) => a.y - b.y);
+      }
+
+      function tableCategoryAtPosition(position) {
+        if (!position) return "";
+        const probeY = Number(position.y) + CARD_MM.height / 2;
+        if (!Number.isFinite(probeY)) return "";
+        let best = null;
+        for (const row of tableCategoryRows()) {
+          const center = (row.y + row.bottom) / 2;
+          const inside = probeY >= row.y - SNAP_Y_PAD_MM && probeY <= row.bottom + SNAP_Y_PAD_MM;
+          const score = inside ? Math.abs(probeY - center) * 0.1 : Math.abs(probeY - center);
+          if (!best || score < best.score) best = { ...row, score, inside };
+        }
+        return best?.inside ? best.category : "";
+      }
+
+      function assignTableCategory(card, category) {
+        const targetCategory = normalizeCategoryId(category);
+        if (!card || !targetCategory || targetCategory === "lands" || card.category === "lands") return false;
+        if (card.category === targetCategory) return false;
+        card.category = targetCategory;
+        return true;
+      }
+
+      function assignDraggedCardsToVisibleRows(drag) {
+        if (!drag?.cards?.length) return;
+        for (const item of drag.cards) {
+          const position = item.card.manualPosition || readElementPosition(item.element);
+          assignTableCategory(item.card, tableCategoryAtPosition(position));
+        }
+      }
+
       function baseAnchorHasCards(anchor, excludedIds) {
         for (const other of state.cards) {
           if (excludedIds.has(other.id) || other.category === "lands") continue;
@@ -4012,7 +4058,7 @@
               y: anchor.y,
               index: 0,
               baseY: anchor.y,
-              canonicalColumn: anchor.category === card.category && anchor.value === effectiveManaValue(card),
+              canonicalColumn: anchor.value === effectiveManaValue(card),
               category: anchor.category,
               value: anchor.value,
               score,
@@ -4031,8 +4077,15 @@
         excluded.add(card.id);
         const entries = state.cards
           .filter(other => canUseSnapAnchor(card, other) && !excluded.has(other.id))
-          .map(other => ({ card: other, position: getLiveCardPosition(other) }))
-          .filter(entry => entry.position);
+          .map(other => {
+            const position = getLiveCardPosition(other);
+            return {
+              card: other,
+              position,
+              category: tableCategoryAtPosition(position) || other.category
+            };
+          })
+          .filter(entry => entry.position && entry.category);
 
         let stackCandidate = null;
         let nearest = null;
@@ -4043,8 +4096,12 @@
           if (!nearest || score < nearest.score) nearest = { ...entry, score };
         }
         if (nearest && Math.abs(probeX - (nearest.position.x + CARD_MM.width / 2)) <= SNAP_X_MM) {
+          const targetCategory = nearest.category || nearest.card.category;
           const sameColumnEntries = entries
-            .filter(entry => Math.abs(entry.position.x - nearest.position.x) <= SNAP_X_MM)
+            .filter(entry =>
+              entry.category === targetCategory &&
+              Math.abs(entry.position.x - nearest.position.x) <= SNAP_X_MM
+            )
             .sort((a, b) => a.position.y - b.position.y || getSortOrder(a.card) - getSortOrder(b.card) || a.card.name.localeCompare(b.card.name));
           const nearestIndex = sameColumnEntries.findIndex(entry => entry.card.id === nearest.card.id);
 
@@ -4077,7 +4134,7 @@
                 const index = clamp(Math.round((probeY - baseY - CARD_MM.height / 2) / STACK_OFFSET_MM), 0, stackEntries.length);
                 const canonicalColumn = stackEntries.every(entry =>
                   !entry.card.manualPosition &&
-                  entry.card.category === card.category &&
+                  entry.card.category === targetCategory &&
                   effectiveManaValue(entry.card) === effectiveManaValue(card)
                 );
                 stackCandidate = {
@@ -4086,7 +4143,7 @@
                   index,
                   baseY,
                   canonicalColumn,
-                  category: nearest.card.category,
+                  category: targetCategory,
                   value: effectiveManaValue(nearest.card),
                   score: nearest.score,
                   stack: stackEntries.map(entry => entry.card)
@@ -4104,6 +4161,8 @@
       }
 
       function applySnap(card, candidate) {
+        const targetCategory = normalizeCategoryId(candidate.category);
+        assignTableCategory(card, targetCategory);
         const stack = candidate.stack.slice();
         stack.splice(candidate.index, 0, card);
         const baseOrder = state.nextOrder;
@@ -4130,12 +4189,14 @@
         state.labelsHidden = true;
         hideSnapGuide();
         layoutCards();
-        setStatus("Aligned", `${card.name} snapped into a nearby stack. Hold Shift while dropping to place freely.`);
+        setStatus("Aligned", `${card.name} snapped into ${categoryLabel(targetCategory || card.category)}. Hold Shift while dropping to place freely.`);
       }
 
       function applyGroupSnap(drag, candidate) {
+        const targetCategory = normalizeCategoryId(candidate.category);
         const movingIds = new Set(drag.cards.map(item => item.card.id));
         const movingCards = drag.cards.map(item => item.card);
+        movingCards.forEach(item => assignTableCategory(item, targetCategory));
         const stack = candidate.stack.filter(item => !movingIds.has(item.id));
         stack.splice(candidate.index, 0, ...movingCards);
         const cardsToPlace = stack.length ? stack : movingCards;
@@ -4156,7 +4217,7 @@
         state.labelsHidden = true;
         hideSnapGuide();
         layoutCards();
-        setStatus("Aligned", `${movingCards.length} selected cards snapped as an ordered stack.`);
+        setStatus("Aligned", `${movingCards.length} selected cards snapped into ${categoryLabel(targetCategory || movingCards[0]?.category)}.`);
       }
 
       function attachCardDrag(element, card) {
@@ -4259,6 +4320,7 @@
             if (event.type !== "pointercancel") {
               if (drag.moved) {
                 if (!drag.group) commitCardPreview();
+                assignDraggedCardsToVisibleRows(drag);
                 state.labelsHidden = true;
                 layoutCards();
                 setStatus(
