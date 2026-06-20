@@ -1161,9 +1161,16 @@
 
   <div id="remove-card-modal-backdrop" class="modal-backdrop" hidden>
     <section class="bucket-modal" role="dialog" aria-modal="true" aria-labelledby="remove-card-modal-title">
-      <h2 id="remove-card-modal-title">Remove Card</h2>
+      <h2 id="remove-card-modal-title">Edit Card</h2>
       <p id="remove-card-modal-detail" class="subtle"></p>
+      <div class="field">
+        <label for="manual-mana-value">Mana value override</label>
+        <input id="manual-mana-value" type="number" min="0" max="99" step="1" inputmode="numeric">
+        <p id="manual-mana-value-detail" class="hint-line"></p>
+      </div>
       <div class="button-row">
+        <button id="save-mana-value" class="primary" type="button">Save MV</button>
+        <button id="clear-mana-value" type="button">Clear MV</button>
         <button id="confirm-remove-card" class="primary danger" type="button">Remove Card</button>
         <button id="cancel-remove-card" type="button">Cancel</button>
       </div>
@@ -1192,7 +1199,7 @@
       const STACK_CLUSTER_GAP_MM = 34;
       const MIN_FETCH_INTERVAL_MS = 1000;
       const HISTORY_LIMIT = 5;
-      const SAVE_VERSION = 2;
+      const SAVE_VERSION = 3;
       const CATEGORY_ORDER = [
         { id: "creatures", label: "Creatures", test: card => hasType(card, "creature") && !hasType(card, "vehicle") && !hasType(card, "spacecraft") },
         { id: "vehicles", label: "Vehicles", test: card => hasType(card, "vehicle") },
@@ -1323,6 +1330,10 @@
       const cancelBucketsButton = document.getElementById("cancel-buckets");
       const removeCardModalBackdrop = document.getElementById("remove-card-modal-backdrop");
       const removeCardModalDetail = document.getElementById("remove-card-modal-detail");
+      const manualManaValueInput = document.getElementById("manual-mana-value");
+      const manualManaValueDetail = document.getElementById("manual-mana-value-detail");
+      const saveManaValueButton = document.getElementById("save-mana-value");
+      const clearManaValueButton = document.getElementById("clear-mana-value");
       const confirmRemoveCardButton = document.getElementById("confirm-remove-card");
       const cancelRemoveCardButton = document.getElementById("cancel-remove-card");
 
@@ -1449,6 +1460,20 @@
       function getManaValue(card) {
         const value = Number(card.cmc ?? card.mana_value ?? card.manaValue ?? 0);
         return Number.isFinite(value) ? Math.floor(value) : 0;
+      }
+
+      function normalizeManualManaValue(value) {
+        if (value === null || value === undefined || value === "") return null;
+        const number = Number(value);
+        if (!Number.isFinite(number)) return null;
+        return Math.max(0, Math.floor(number));
+      }
+
+      function effectiveManaValue(card) {
+        const manualValue = normalizeManualManaValue(card?.manualManaValue);
+        if (manualValue !== null) return manualValue;
+        const detectedValue = Number(card?.manaValue);
+        return Number.isFinite(detectedValue) ? Math.max(0, Math.floor(detectedValue)) : 0;
       }
 
       function getImageUriFromObject(card) {
@@ -1722,6 +1747,7 @@
           activeFaceIndex,
           typeLine: raw.type_line || "",
           manaValue: getManaValue(raw),
+          manualManaValue: null,
           manaCost: manaCostText(raw),
           oracleText: oracleText(raw),
           colors: normalizeColorArray(raw.colors),
@@ -2260,6 +2286,7 @@
           activeFaceIndex: Number.isFinite(Number(saved.activeFaceIndex)) ? Math.floor(Number(saved.activeFaceIndex)) : 0,
           typeLine,
           manaValue: Number.isFinite(Number(saved.manaValue)) ? Math.floor(Number(saved.manaValue)) : 0,
+          manualManaValue: normalizeManualManaValue(saved.manualManaValue),
           manaCost: String(saved.manaCost || saved.mana_cost || ""),
           oracleText: String(saved.oracleText || saved.oracle_text || ""),
           colors: normalizeColorArray(saved.colors),
@@ -2366,6 +2393,7 @@
           activeFaceIndex: 0,
           typeLine: "",
           manaValue: 0,
+          manualManaValue: null,
           manaCost: "",
           oracleText: "",
           colors: [],
@@ -2406,6 +2434,7 @@
           activeFaceIndex: clampFaceIndex(card),
           typeLine: card.typeLine,
           manaValue: card.manaValue,
+          manualManaValue: normalizeManualManaValue(card.manualManaValue),
           manaCost: card.manaCost || "",
           oracleText: card.oracleText || "",
           oracleId: card.oracleId || "",
@@ -2429,13 +2458,72 @@
       function openRemoveCardModal(card) {
         if (!card) return;
         state.pendingRemoveCard = card;
-        removeCardModalDetail.textContent = `Remove ${card.name} from the table? Undo can bring it back.`;
+        const manualValue = normalizeManualManaValue(card.manualManaValue);
+        const detectedValue = getManaValue(card);
+        removeCardModalDetail.textContent = card.name;
+        manualManaValueInput.value = String(manualValue ?? effectiveManaValue(card));
+        manualManaValueDetail.textContent = manualValue === null
+          ? `Detected MV ${detectedValue}. No override active.`
+          : `Detected MV ${detectedValue}. Override active: MV ${manualValue}.`;
+        clearManaValueButton.disabled = manualValue === null;
         removeCardModalBackdrop.hidden = false;
+        window.setTimeout(() => {
+          manualManaValueInput.focus();
+          manualManaValueInput.select();
+        }, 0);
       }
 
       function closeRemoveCardModal() {
         state.pendingRemoveCard = null;
         removeCardModalBackdrop.hidden = true;
+      }
+
+      function saveManualManaValue() {
+        const card = state.pendingRemoveCard;
+        if (!card || !state.cards.some(item => item.id === card.id)) {
+          closeRemoveCardModal();
+          return;
+        }
+        const nextValue = normalizeManualManaValue(manualManaValueInput.value);
+        if (nextValue === null) {
+          setStatus("No mana value", "Enter a non-negative number or clear the override.");
+          return;
+        }
+        const currentValue = normalizeManualManaValue(card.manualManaValue);
+        if (currentValue === nextValue) {
+          closeRemoveCardModal();
+          return;
+        }
+        const before = snapshotTableState();
+        card.manualManaValue = nextValue;
+        delete card.manualPosition;
+        rememberTableSnapshot(before);
+        layoutCards();
+        updateStatsAndBuckets();
+        updateHistoryButtons();
+        closeRemoveCardModal();
+        setStatus("Mana value set", `${card.name} now uses MV ${nextValue} for table, buckets, and stats.`);
+      }
+
+      function clearManualManaValue() {
+        const card = state.pendingRemoveCard;
+        if (!card || !state.cards.some(item => item.id === card.id)) {
+          closeRemoveCardModal();
+          return;
+        }
+        if (normalizeManualManaValue(card.manualManaValue) === null) {
+          closeRemoveCardModal();
+          return;
+        }
+        const before = snapshotTableState();
+        card.manualManaValue = null;
+        delete card.manualPosition;
+        rememberTableSnapshot(before);
+        layoutCards();
+        updateStatsAndBuckets();
+        updateHistoryButtons();
+        closeRemoveCardModal();
+        setStatus("Mana value cleared", `${card.name} now uses detected MV ${effectiveManaValue(card)}.`);
       }
 
       function confirmRemoveCard() {
@@ -2464,7 +2552,7 @@
         element.className = "card is-loading";
         element.dataset.cardId = card.id;
         element.dataset.category = card.category;
-        element.dataset.manaValue = String(card.manaValue);
+        element.dataset.manaValue = String(effectiveManaValue(card));
         element.setAttribute("aria-label", card.name);
         element.innerHTML = `
           <div class="image-shell">
@@ -2569,7 +2657,7 @@
         }
 
         for (const group of groups.values()) {
-          group.sort((a, b) => a.manaValue - b.manaValue || getSortOrder(a) - getSortOrder(b) || a.name.localeCompare(b.name));
+          group.sort((a, b) => effectiveManaValue(a) - effectiveManaValue(b) || getSortOrder(a) - getSortOrder(b) || a.name.localeCompare(b.name));
         }
 
         return groups;
@@ -2593,8 +2681,7 @@
         if (card.manualPosition && Number.isFinite(Number(card.manualPosition.x))) {
           return Math.max(0, Math.round((Number(card.manualPosition.x) - LEFT_MM) / columnStepMm()));
         }
-        const manaValue = Number(card.manaValue);
-        return Math.max(0, Math.floor(Number.isFinite(manaValue) ? manaValue : 0) - firstManaValue);
+        return Math.max(0, effectiveManaValue(card) - firstManaValue);
       }
 
       function measureCategoryHeight(cards, firstManaValue = 1, categoryTopY = TOP_MM) {
@@ -2620,7 +2707,7 @@
       function getLayoutManaValues(cards) {
         const manaValues = cards
           .filter(card => card.category !== "lands")
-          .map(card => Number(card.manaValue))
+          .map(effectiveManaValue)
           .filter(Number.isFinite);
         if (!manaValues.length) return [];
         const maxValue = Math.max(1, ...manaValues.map(value => Math.max(0, Math.floor(value))));
@@ -2718,7 +2805,7 @@
           const { category, group, structureGroup, visualCards } = row;
           const columns = new Map();
           for (const card of group) {
-            const key = card.manaValue;
+            const key = effectiveManaValue(card);
             if (!columns.has(key)) columns.set(key, []);
             columns.get(key).push(card);
           }
@@ -2802,7 +2889,7 @@
 
       function getBucketManaValues(cards) {
         if (!cards.length) return [0];
-        const values = cards.map(card => Math.max(0, Math.floor(Number(card.manaValue) || 0)));
+        const values = cards.map(effectiveManaValue);
         const maxValue = Math.max(0, ...values);
         const minValue = values.some(value => value <= 0) ? 0 : 1;
         return Array.from({ length: maxValue - minValue + 1 }, (_, index) => minValue + index);
@@ -3104,12 +3191,12 @@
         const rowWidth = Math.max(CARD_MM.width, ((manaValues.length - 1) * columnStepMm()) + CARD_MM.width);
 
         for (const row of bucketRows) {
-          const cards = [...row.cards].sort((a, b) => a.manaValue - b.manaValue || getBucketSortOrder(a) - getBucketSortOrder(b) || a.name.localeCompare(b.name));
+          const cards = [...row.cards].sort((a, b) => effectiveManaValue(a) - effectiveManaValue(b) || getBucketSortOrder(a) - getBucketSortOrder(b) || a.name.localeCompare(b.name));
           const rowY = y;
           labels.push({ id: `bucket-${row.id}`, label: row.label, count: cards.length, x: LEFT_MM, y: y - 28 });
           const columns = new Map();
           for (const card of cards) {
-            const value = Math.max(0, Math.floor(Number(card.manaValue) || 0));
+            const value = effectiveManaValue(card);
             if (!columns.has(value)) columns.set(value, []);
             columns.get(value).push(card);
           }
@@ -3241,6 +3328,8 @@
 
         for (const card of state.cards) {
           const element = ensureCardElement(card);
+          element.dataset.category = card.category;
+          element.dataset.manaValue = String(effectiveManaValue(card));
           if (card.manualPosition) {
             setElementPosition(element, card.manualPosition.x, card.manualPosition.y);
           } else {
@@ -3583,12 +3672,12 @@
         const lands = state.cards.filter(card => card.category === "lands");
         const nonlands = state.cards.filter(card => card.category !== "lands");
         const avgMana = nonlands.length
-          ? (nonlands.reduce((sum, card) => sum + Number(card.manaValue || 0), 0) / nonlands.length).toFixed(2)
+          ? (nonlands.reduce((sum, card) => sum + effectiveManaValue(card), 0) / nonlands.length).toFixed(2)
           : "0.00";
-        const manaValues = nonlands.map(card => Math.max(0, Number(card.manaValue) || 0));
+        const manaValues = nonlands.map(effectiveManaValue);
         const maxMana = Math.max(0, ...manaValues);
         const manaRows = Array.from({ length: maxMana + 1 }, (_, value) => {
-          const cards = nonlands.filter(card => Math.max(0, Number(card.manaValue) || 0) === value);
+          const cards = nonlands.filter(card => effectiveManaValue(card) === value);
           return { label: `MV ${value}`, count: cards.length, cards };
         });
         const typeRows = [
@@ -3688,7 +3777,7 @@
           return;
         }
         const sorted = [...cards].sort((a, b) =>
-          a.manaValue - b.manaValue ||
+          effectiveManaValue(a) - effectiveManaValue(b) ||
           categoryLabel(a.category).localeCompare(categoryLabel(b.category)) ||
           getBucketSortOrder(a) - getBucketSortOrder(b) ||
           a.name.localeCompare(b.name)
@@ -3923,7 +4012,7 @@
               y: anchor.y,
               index: 0,
               baseY: anchor.y,
-              canonicalColumn: anchor.category === card.category && anchor.value === card.manaValue,
+              canonicalColumn: anchor.category === card.category && anchor.value === effectiveManaValue(card),
               category: anchor.category,
               value: anchor.value,
               score,
@@ -3989,7 +4078,7 @@
                 const canonicalColumn = stackEntries.every(entry =>
                   !entry.card.manualPosition &&
                   entry.card.category === card.category &&
-                  entry.card.manaValue === card.manaValue
+                  effectiveManaValue(entry.card) === effectiveManaValue(card)
                 );
                 stackCandidate = {
                   x: stackX,
@@ -3998,7 +4087,7 @@
                   baseY,
                   canonicalColumn,
                   category: nearest.card.category,
-                  value: nearest.card.manaValue,
+                  value: effectiveManaValue(nearest.card),
                   score: nearest.score,
                   stack: stackEntries.map(entry => entry.card)
                 };
@@ -4788,7 +4877,7 @@
           layoutCards();
           await cacheCardImages(card);
           renderCardImage(card);
-          setStatus("Placed", `${card.name} -> ${categoryLabel(card.category)} | MV ${card.manaValue}`, (index + 1) / names.length);
+          setStatus("Placed", `${card.name} -> ${categoryLabel(card.category)} | MV ${effectiveManaValue(card)}`, (index + 1) / names.length);
 
           if (state.placementDelay > 0) {
             await wait(state.placementDelay);
@@ -4889,6 +4978,13 @@
         bucketModalBackdrop.addEventListener("pointerdown", event => {
           if (event.target === bucketModalBackdrop) closeBucketEditor({ restoreCustomBuckets: true });
         });
+        saveManaValueButton.addEventListener("click", saveManualManaValue);
+        clearManaValueButton.addEventListener("click", clearManualManaValue);
+        manualManaValueInput.addEventListener("keydown", event => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          saveManualManaValue();
+        });
         confirmRemoveCardButton.addEventListener("click", confirmRemoveCard);
         cancelRemoveCardButton.addEventListener("click", closeRemoveCardModal);
         removeCardModalBackdrop.addEventListener("pointerdown", event => {
@@ -4941,6 +5037,7 @@
           activeFaceIndex: Number.isFinite(Number(card.activeFaceIndex)) ? Math.floor(Number(card.activeFaceIndex)) : 0,
           typeLine: card.typeLine || card.type_line || "",
           manaValue: getManaValue(card),
+          manualManaValue: normalizeManualManaValue(card.manualManaValue),
           manaCost: String(card.manaCost || card.mana_cost || ""),
           oracleText: String(card.oracleText || card.oracle_text || ""),
           oracleId: String(card.oracleId || card.oracle_id || ""),
@@ -5000,6 +5097,7 @@
           parseDecklist,
           cleanDeckLine,
           categorize,
+          effectiveManaValue,
           computeLayout,
           loadDeck,
           addCardByName,

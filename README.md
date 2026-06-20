@@ -1,6 +1,6 @@
 # MTG Deck Table Viewer
 
-Version: v0.2
+Version: v0.3
 
 A single-file Magic: The Gathering deck viewer for sorting decks and visualizing their stats, with automation and intuitive UI.
 
@@ -63,7 +63,7 @@ The viewer loads one visual card per non-empty decklist line. Scryfall fetches a
 ### Tabletop deck view
 - Drag a card to move it.
 - Use Add Card to append one card to the current table.
-- Right-click a card to remove it after confirmation.
+- Right-click a card to override its mana value for table columns, bucket placement, and stats, or remove it after confirmation.
 - Drop near another card to snap into that stack.
 - Hold Shift while dropping to place freely without snapping.
 - Hold a card to bring it forward temporarily; release to return it to its stack layer.
