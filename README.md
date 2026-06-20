@@ -18,7 +18,9 @@ Highly portable: single file browser app and single file deck save.
 
 ### Automated and interactive tabletop deck view
 - Imports card images from Scryfall by card name.
-- Groups cards into creature, vehicle, spacecraft, planeswalker, enchantment, artifact, instant, ritual, other, and land areas.
+- Groups cards into creature, planeswalker, enchantment, artifact, instant, sorcery, others, and land areas by default.
+- Can show Scryfall-detected subtypes as extra tabletop rows, and supports custom tabletop types.
+- Supports unlimited commander tags; commander-tagged cards appear in their own section under Creatures.
 - Aligns non-land cards by mana value.
 - Supports manually overriding the mana value (i.e., for X, XX cards you plan to ideally cast at a given MV).
 - Keeps lands on the right side of the table.
@@ -34,7 +36,7 @@ Highly portable: single file browser app and single file deck save.
 
 ### Deck stats
 - Stats view for deck summary, mana curve, type counts, color demand/sources, utility bucket counts, and stats-only custom categories.
-- Custom stats categories let you count tags such as Equipment without changing tabletop placement or utility buckets.
+- Custom stats categories are edited from the Table tab and let you count tags such as Equipment without changing tabletop placement or utility buckets.
 
 ![Loaded table overview](screenshots/stats_view.png)
 
@@ -68,7 +70,8 @@ The viewer loads one visual card per non-empty decklist line. Scryfall fetches a
 ### Tabletop deck view
 - Drag a card to move it.
 - Use Add Card to append one card to the current table.
-- Right-click a card to override its mana value for table columns, bucket placement, and stats, or remove it after confirmation.
+- Right-click a card to override its mana value, assign commander/table type/custom stats tags, or remove it after confirmation.
+- Use Show Subtypes to expand tabletop rows from main types into detected subtypes.
 - Drop near another card to snap into that stack.
 - Hold Shift while dropping to place freely without snapping.
 - Hold a card to bring it forward temporarily; release to return it to its stack layer.

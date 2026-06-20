@@ -40,7 +40,7 @@ Create a viewer save, not just a decklist. Read every physical card visible or i
    - Prefer `name=` when a localized title is hard to resolve or several cards share words.
    - Use `--embed-images` when the user wants offline import or when quality matters; this embeds every available non-placeholder card face.
    - Use a clear deck title and save next to the source deck images unless the user gave another destination.
-   - Emit the current viewer save shape: `version: 3`, `customBuckets`, `customStatsCategories`, `layout.activeBucketFilter`, `layout.nextBucketOrder`, card colors, mana value, optional `manualManaValue`, mana cost, oracle text/id, produced mana, utility bucket fields, stats-category fields, bucket order, and face data.
+   - Emit the current viewer save shape: `version: 3`, `customBuckets`, `customTableSections`, `customStatsCategories`, `layout.activeBucketFilter`, `layout.nextBucketOrder`, `layout.showSubtypes`, card colors, mana value, optional `manualManaValue`, mana cost, oracle text/id, produced mana, detected `category`, `tableCategory`, `isCommander`, utility bucket fields, stats-category fields, bucket order, and face data.
    - Set `manualManaValue: null` unless the user explicitly gives an override. Do not infer overrides from where a physical card sat in a photo.
 
 5. Verify output.

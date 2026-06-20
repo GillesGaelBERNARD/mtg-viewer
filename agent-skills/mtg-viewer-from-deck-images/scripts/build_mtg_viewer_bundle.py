@@ -278,12 +278,8 @@ def category_for(type_line):
     text = type_line.lower()
     if "land" in text:
         return "lands"
-    if "creature" in text and "vehicle" not in text and "spacecraft" not in text:
+    if "creature" in text:
         return "creatures"
-    if "vehicle" in text:
-        return "vehicles"
-    if "spacecraft" in text:
-        return "spacecraft"
     if "planeswalker" in text:
         return "planeswalkers"
     if "enchantment" in text:
@@ -293,8 +289,8 @@ def category_for(type_line):
     if "instant" in text:
         return "instants"
     if "sorcery" in text:
-        return "rituals"
-    return "other"
+        return "sorcery"
+    return "others"
 
 
 def color_array(card, key):
@@ -344,6 +340,8 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
         "colorIdentity": color_array(canonical, "color_identity") or color_array(chosen, "color_identity"),
         "producedMana": color_array(chosen, "produced_mana") or color_array(canonical, "produced_mana"),
         "category": category_for(type_line),
+        "tableCategory": "",
+        "isCommander": False,
         "utilityBuckets": [],
         "autoBuckets": [],
         "oracleTags": [],
@@ -436,12 +434,14 @@ def main():
         "deckTitle": args.title,
         "decklist": "\n".join(decklist_lines),
         "customBuckets": [],
+        "customTableSections": [],
         "customStatsCategories": [],
         "layout": {
             "nextOrder": len(cards) + 1,
             "nextBucketOrder": len(cards) + 1,
             "z": 30 + len(cards),
             "labelsHidden": False,
+            "showSubtypes": False,
             "activeBucketFilter": "",
             "camera": {"x": 0, "y": 0, "scale": 0.84},
         },

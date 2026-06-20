@@ -589,6 +589,15 @@
       text-transform: none;
     }
 
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+      color: #c6d4e8;
+      font-weight: 750;
+    }
+
     input[type="range"] {
       width: 100%;
       accent-color: var(--accent);
@@ -1078,6 +1087,18 @@
         </div>
 
         <div class="button-row">
+          <button id="toggle-subtypes" type="button">Show Subtypes</button>
+          <button id="add-table-section" type="button">Add Table Type</button>
+          <button id="add-stats-category" type="button">Add Stats Category</button>
+          <button id="edit-table-selection" type="button">Edit Selected</button>
+        </div>
+
+        <div class="stats-section">
+          <h2>Custom Stats Categories</h2>
+          <div id="stats-category-list" class="bucket-chip-list"></div>
+        </div>
+
+        <div class="button-row">
           <button id="save-layout" type="button" disabled>Save / Export</button>
           <button id="import-layout" type="button">Import Save</button>
         </div>
@@ -1103,14 +1124,6 @@
 
       <section class="panel-view" id="panel-stats" hidden>
         <p class="hint-line">Stats are shown on the table. Use pan, zoom, fit, and center to inspect the board.</p>
-        <div class="button-row">
-          <button id="add-stats-category" type="button">Add Category</button>
-          <button id="edit-stats-categories" type="button">Edit Selected</button>
-        </div>
-        <div class="stats-section">
-          <h2>Custom Categories</h2>
-          <div id="stats-category-list" class="bucket-chip-list"></div>
-        </div>
         <div class="stats-cache" hidden>
           <div id="summary-stats" class="stats-grid"></div>
           <div id="mana-curve-stats"></div>
@@ -1189,12 +1202,26 @@
     <section class="bucket-modal" role="dialog" aria-modal="true" aria-labelledby="remove-card-modal-title">
       <h2 id="remove-card-modal-title">Edit Card</h2>
       <p id="remove-card-modal-detail" class="subtle"></p>
+      <label class="check-row">
+        <input id="commander-tag" type="checkbox">
+        <span>Commander tag</span>
+      </label>
+      <div class="field">
+        <label for="table-section-select">Table type</label>
+        <select id="table-section-select"></select>
+        <p id="table-section-detail" class="hint-line"></p>
+      </div>
       <div class="field">
         <label for="manual-mana-value">Mana value override</label>
         <input id="manual-mana-value" type="number" min="0" max="99" step="1" inputmode="numeric">
         <p id="manual-mana-value-detail" class="hint-line"></p>
       </div>
+      <div class="stats-section">
+        <h2>Custom Stats Categories</h2>
+        <div id="card-stats-category-checks" class="bucket-checks"></div>
+      </div>
       <div class="button-row">
+        <button id="save-card-edits" class="primary" type="button">Save Card Edits</button>
         <button id="save-mana-value" class="primary" type="button">Save MV</button>
         <button id="clear-mana-value" type="button">Clear MV</button>
         <button id="confirm-remove-card" class="primary danger" type="button">Remove Card</button>
@@ -1227,16 +1254,16 @@
       const HISTORY_LIMIT = 5;
       const SAVE_VERSION = 3;
       const CATEGORY_ORDER = [
-        { id: "creatures", label: "Creatures", test: card => hasType(card, "creature") && !hasType(card, "vehicle") && !hasType(card, "spacecraft") },
-        { id: "vehicles", label: "Vehicles", test: card => hasType(card, "vehicle") },
-        { id: "spacecraft", label: "Spacecraft", test: card => hasType(card, "spacecraft") },
+        { id: "creatures", label: "Creatures", test: card => hasType(card, "creature") },
+        { id: "commanders", label: "Commanders", test: card => Boolean(card.isCommander), special: true },
         { id: "planeswalkers", label: "Planeswalkers", test: card => hasType(card, "planeswalker") },
         { id: "enchantments", label: "Enchantments", test: card => isStandaloneEnchantment(card) },
         { id: "artifacts", label: "Artifacts", test: card => isStandaloneArtifact(card) },
         { id: "instants", label: "Instants", test: card => hasType(card, "instant") },
-        { id: "rituals", label: "Rituals", test: card => hasType(card, "sorcery") },
-        { id: "other", label: "Other", test: () => true }
+        { id: "sorcery", label: "Sorcery", test: card => hasType(card, "sorcery") },
+        { id: "others", label: "Others", test: () => true }
       ];
+      const DEFAULT_TABLE_SECTION_IDS = new Set(CATEGORY_ORDER.map(category => category.id));
       const COLOR_ORDER = [
         { id: "W", label: "White", short: "W", color: "#f2e7be", text: "#1d1a12" },
         { id: "U", label: "Blue", short: "U", color: "#4fa8ff", text: "#061321" },
@@ -1290,17 +1317,19 @@
         selectedCardIds: new Set(),
         suppressContextMenu: false,
         viewMode: "table",
+        showSubtypes: false,
         activeBucketFilter: "",
         bucketEntries: [],
         bucketSnapAnchors: [],
         bucketFocusTargets: new Map(),
         customBuckets: [],
+        customTableSections: [],
         customStatsCategories: [],
         oracleTagIndex: null,
         oracleTagPromise: null,
         bucketEditor: null,
         statsCategoryEditor: null,
-        pendingRemoveCard: null
+        pendingEditCards: []
       };
 
       const viewport = document.getElementById("viewport");
@@ -1325,6 +1354,9 @@
       const undoButton = document.getElementById("undo-move");
       const redoButton = document.getElementById("redo-move");
       const resetPositionsButton = document.getElementById("reset-positions");
+      const toggleSubtypesButton = document.getElementById("toggle-subtypes");
+      const addTableSectionButton = document.getElementById("add-table-section");
+      const editTableSelectionButton = document.getElementById("edit-table-selection");
       const undoBucketsButton = document.getElementById("undo-buckets");
       const redoBucketsButton = document.getElementById("redo-buckets");
       const resetBucketsButton = document.getElementById("reset-buckets");
@@ -1348,7 +1380,6 @@
       const customCategoryStats = document.getElementById("custom-category-stats");
       const statsCategoryList = document.getElementById("stats-category-list");
       const addStatsCategoryButton = document.getElementById("add-stats-category");
-      const editStatsCategoriesButton = document.getElementById("edit-stats-categories");
       const bucketFilterList = document.getElementById("bucket-filter-list");
       const bucketCardList = document.getElementById("bucket-card-list");
       const autoBucketsButton = document.getElementById("auto-buckets");
@@ -1372,8 +1403,13 @@
       const cancelStatsCategoriesButton = document.getElementById("cancel-stats-categories");
       const removeCardModalBackdrop = document.getElementById("remove-card-modal-backdrop");
       const removeCardModalDetail = document.getElementById("remove-card-modal-detail");
+      const commanderTagInput = document.getElementById("commander-tag");
+      const tableSectionSelect = document.getElementById("table-section-select");
+      const tableSectionDetail = document.getElementById("table-section-detail");
       const manualManaValueInput = document.getElementById("manual-mana-value");
       const manualManaValueDetail = document.getElementById("manual-mana-value-detail");
+      const cardStatsCategoryChecks = document.getElementById("card-stats-category-checks");
+      const saveCardEditsButton = document.getElementById("save-card-edits");
       const saveManaValueButton = document.getElementById("save-mana-value");
       const clearManaValueButton = document.getElementById("clear-mana-value");
       const confirmRemoveCardButton = document.getElementById("confirm-remove-card");
@@ -1477,6 +1513,33 @@
         updateHistoryButtons();
       }
 
+      function createCustomTableSection(label) {
+        const cleanLabel = cleanBucketName(label);
+        if (!cleanLabel) return null;
+        const existing = tableSectionDefinitions().find(section => section.label.toLowerCase() === cleanLabel.toLowerCase());
+        if (existing) return { ...existing, existing: true };
+        const usedIds = new Set(tableSectionDefinitions().map(section => section.id));
+        const section = {
+          id: uniqueBucketId(`table-${bucketSlug(cleanLabel)}`, usedIds),
+          label: cleanLabel
+        };
+        state.customTableSections = normalizeCustomTableSections([...state.customTableSections, section]);
+        return section;
+      }
+
+      function promptAddCustomTableSection() {
+        const label = window.prompt("Custom table type name");
+        if (label === null) return;
+        const section = createCustomTableSection(label);
+        if (!section) {
+          setStatus("No type added", "Enter a name to create a table type.");
+          return;
+        }
+        layoutCards();
+        updateHistoryButtons();
+        setStatus(section.existing ? "Type exists" : "Type added", `${section.label} is available in the tabletop editor.`);
+      }
+
       function createCustomStatsCategory(label) {
         const cleanLabel = cleanBucketName(label);
         if (!cleanLabel) return null;
@@ -1500,23 +1563,43 @@
           return;
         }
         updateStatsAndBuckets();
+        if (!removeCardModalBackdrop.hidden) renderCardStatsCategoryChecks(pendingEditCards());
         if (state.viewMode === "stats") layoutCards();
         setStatus(category.existing ? "Category exists" : "Category added", `${category.label} is ready for stats-only tagging.`);
       }
 
       function typeText(card) {
-        return String(card.type_line || card.typeLine || "").toLowerCase();
+        return String(card.type_line || card.typeLine || "");
+      }
+
+      function typeTokenize(text) {
+        return String(text || "").match(/[A-Za-z0-9][A-Za-z0-9'.-]*/g) || [];
+      }
+
+      function typeParts(card) {
+        const [front] = typeText(card).split(/\s+\/\/\s+/);
+        const [main = "", subtype = ""] = String(front || "").split(/[—–]/);
+        return { main, subtype };
+      }
+
+      function mainTypeTokens(card) {
+        return new Set(typeTokenize(typeParts(card).main).map(item => item.toLowerCase()));
+      }
+
+      function subtypeTokens(card) {
+        return [...new Set(typeTokenize(typeParts(card).subtype).map(item => item.replace(/\b\w/g, char => char.toUpperCase())))];
       }
 
       function hasType(card, type) {
-        return typeText(card).includes(type);
+        return mainTypeTokens(card).has(String(type || "").toLowerCase());
+      }
+
+      function hasSubtype(card, type) {
+        return subtypeTokens(card).some(item => item.toLowerCase() === String(type || "").toLowerCase());
       }
 
       function isExcludedPermanentSubtype(card) {
-        if (hasType(card, "creature") || hasType(card, "vehicle") || hasType(card, "spacecraft") || hasType(card, "planeswalker")) {
-          return true;
-        }
-        return false;
+        return hasType(card, "creature") || hasType(card, "planeswalker");
       }
 
       function isStandaloneEnchantment(card) {
@@ -1526,13 +1609,70 @@
 
       function isStandaloneArtifact(card) {
         if (isExcludedPermanentSubtype(card)) return false;
-        return hasType(card, "artifact") || hasType(card, "equipment");
+        return hasType(card, "artifact") || hasSubtype(card, "equipment");
+      }
+
+      function sectionIdFromLabel(prefix, label) {
+        return `${prefix}-${bucketSlug(label)}`;
+      }
+
+      function detectedMainCategory(card) {
+        if (hasType(card, "land")) return "lands";
+        const category = CATEGORY_ORDER.find(item => !item.special && item.test(card));
+        return category?.id || "others";
+      }
+
+      function subtypeCategoryFor(card) {
+        const parent = detectedMainCategory(card);
+        if (parent === "lands" || parent === "others") return "";
+        const [subtype] = subtypeTokens(card);
+        return subtype ? sectionIdFromLabel(`subtype-${parent}`, subtype) : "";
+      }
+
+      function subtypeLabelForId(id) {
+        const match = String(id || "").match(/^subtype-[^-]+-(.+)$/);
+        if (!match) return "";
+        const slug = match[1];
+        for (const card of state.cards) {
+          for (const subtype of subtypeTokens(card)) {
+            if (bucketSlug(subtype) === slug) return subtype;
+          }
+        }
+        return slug.replace(/-/g, " ").replace(/\b\w/g, char => char.toUpperCase());
+      }
+
+      function subtypeParentForId(id) {
+        const match = String(id || "").match(/^subtype-([^-]+)-/);
+        return match ? normalizeCategoryId(match[1]) : "";
+      }
+
+      function currentTableCategory(card) {
+        if (hasType(card, "land")) return "lands";
+        if (card.isCommander) return "commanders";
+        const override = normalizeCategoryId(card.tableCategory);
+        if (override && override !== "lands") {
+          if (!state.showSubtypes && override.startsWith("subtype-")) {
+            return subtypeParentForId(override) || detectedMainCategory(card);
+          }
+          return override;
+        }
+        if (state.showSubtypes) {
+          const subtypeCategory = subtypeCategoryFor(card);
+          if (subtypeCategory) return subtypeCategory;
+        }
+        return detectedMainCategory(card);
       }
 
       function normalizeCategoryId(id) {
-        if (id === "enchantments-equipment" || id === "enchantments-equipment-artifacts" || id === "instants-rituals") return "";
-        if (id === "lands") return id;
-        return CATEGORY_ORDER.some(category => category.id === id) ? id : "";
+        const value = String(id || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        if (!value) return "";
+        if (value === "other") return "others";
+        if (value === "rituals" || value === "sorceries") return "sorcery";
+        if (value === "lands") return value;
+        if (DEFAULT_TABLE_SECTION_IDS.has(value)) return value;
+        if (value.startsWith("subtype-")) return value;
+        if (normalizeCustomTableSections(state.customTableSections).some(section => section.id === value)) return value;
+        return "";
       }
 
       function getManaValue(card) {
@@ -1631,16 +1771,21 @@
       }
 
       function categorize(card) {
-        if (hasType(card, "land")) {
-          return "lands";
-        }
-        return CATEGORY_ORDER.find(category => category.test(card))?.id || "other";
+        return detectedMainCategory(card);
       }
 
       function categoryLabel(id) {
         id = normalizeCategoryId(id) || id;
         if (id === "lands") return "Lands";
-        return CATEGORY_ORDER.find(category => category.id === id)?.label || "Other";
+        const definition = tableSectionDefinitions().find(category => category.id === id);
+        if (definition) return definition.label;
+        if (String(id || "").startsWith("subtype-")) return subtypeLabelForId(id);
+        return "Others";
+      }
+
+      function tableSectionDisplayLabel(section) {
+        if (!section) return "Others";
+        return section.subtype ? `${categoryLabel(section.parent)} / ${section.label}` : section.label;
       }
 
       function normalizeColorArray(value) {
@@ -1693,6 +1838,18 @@
         return buckets;
       }
 
+      function normalizeCustomTableSections(value) {
+        const usedIds = new Set([...CATEGORY_ORDER.map(category => category.id), "lands"]);
+        const sections = [];
+        for (const item of Array.isArray(value) ? value : []) {
+          const label = cleanBucketName(typeof item === "string" ? item : item?.label || item?.name || item?.id);
+          if (!label) continue;
+          const preferredId = String(item?.id || `table-${bucketSlug(label)}`);
+          sections.push({ id: uniqueBucketId(preferredId, usedIds), label });
+        }
+        return sections;
+      }
+
       function normalizeCustomStatsCategories(value) {
         const usedIds = new Set();
         const categories = [];
@@ -1703,6 +1860,31 @@
           categories.push({ id: uniqueBucketId(preferredId, usedIds), label });
         }
         return categories;
+      }
+
+      function tableSectionDefinitions(cards = state.cards) {
+        if (!cards.length) return [];
+        const definitions = [];
+        const byParent = new Map();
+        for (const card of cards) {
+          const parent = detectedMainCategory(card);
+          if (parent === "lands" || parent === "others") continue;
+          for (const subtype of subtypeTokens(card)) {
+            const id = sectionIdFromLabel(`subtype-${parent}`, subtype);
+            if (!byParent.has(parent)) byParent.set(parent, new Map());
+            byParent.get(parent).set(id, { id, label: subtype, parent, subtype: true });
+          }
+        }
+        const hasCommanders = cards.some(card => card.isCommander || normalizeCategoryId(card.tableCategory) === "commanders");
+        for (const category of CATEGORY_ORDER) {
+          if (category.id === "commanders" && !hasCommanders) continue;
+          definitions.push({ id: category.id, label: category.label, main: true });
+          if (state.showSubtypes && byParent.has(category.id)) {
+            definitions.push(...[...byParent.get(category.id).values()].sort((a, b) => a.label.localeCompare(b.label)));
+          }
+        }
+        definitions.push(...normalizeCustomTableSections(state.customTableSections).map(section => ({ ...section, custom: true })));
+        return definitions;
       }
 
       function allStatsCategoryDefinitions() {
@@ -1861,6 +2043,8 @@
           colorIdentity: normalizeColorArray(raw.color_identity),
           producedMana: normalizeColorArray(raw.produced_mana),
           category: categorize(raw),
+          tableCategory: "",
+          isCommander: false,
           utilityBuckets: [],
           autoBuckets: [],
           oracleTags: [],
@@ -2254,12 +2438,14 @@
           deckTitle: state.deckTitle,
           decklist: decklistInput.value,
           customBuckets: normalizeCustomBuckets(state.customBuckets),
+          customTableSections: normalizeCustomTableSections(state.customTableSections),
           customStatsCategories: normalizeCustomStatsCategories(state.customStatsCategories),
           layout: {
             nextOrder: state.nextOrder,
             nextBucketOrder: state.nextBucketOrder,
             z: state.z,
             labelsHidden: state.labelsHidden,
+            showSubtypes: state.showSubtypes,
             activeBucketFilter: state.activeBucketFilter,
             camera: { ...state.camera }
           },
@@ -2402,6 +2588,8 @@
           colorIdentity: normalizeColorArray(saved.colorIdentity || saved.color_identity),
           producedMana: normalizeColorArray(saved.producedMana || saved.produced_mana),
           category: normalizeCategoryId(String(saved.category || "")) || categorize({ type_line: typeLine }),
+          tableCategory: normalizeCategoryId(String(saved.tableCategory || "")),
+          isCommander: Boolean(saved.isCommander),
           error: String(saved.error || ""),
           utilityBuckets: normalizeBucketList(saved.utilityBuckets),
           autoBuckets: normalizeBucketList(saved.autoBuckets),
@@ -2434,6 +2622,7 @@
         hideSelectionBox();
         const usedIds = new Set();
         state.customBuckets = normalizeCustomBuckets(bundle.customBuckets);
+        state.customTableSections = normalizeCustomTableSections(bundle.customTableSections);
         state.customStatsCategories = normalizeCustomStatsCategories(bundle.customStatsCategories);
         state.cards = bundle.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
         state.undoStack = [];
@@ -2441,6 +2630,7 @@
         state.bucketUndoStack = [];
         state.bucketRedoStack = [];
         state.labelsHidden = Boolean(bundle.layout?.labelsHidden);
+        state.showSubtypes = Boolean(bundle.layout?.showSubtypes);
         state.activeBucketFilter = normalizeBucketFilter(bundle.layout?.activeBucketFilter);
         setDeckTitle(bundle.deckTitle || "", { status: false });
         state.previewCard = null;
@@ -2510,7 +2700,9 @@
           colors: [],
           colorIdentity: [],
           producedMana: [],
-          category: "other",
+          category: "others",
+          tableCategory: "",
+          isCommander: false,
           utilityBuckets: [],
           autoBuckets: [],
           oracleTags: [],
@@ -2553,7 +2745,9 @@
           colors: normalizeColorArray(card.colors),
           colorIdentity: normalizeColorArray(card.colorIdentity),
           producedMana: normalizeColorArray(card.producedMana),
-          category: card.category,
+          category: normalizeCategoryId(card.category) || detectedMainCategory(card),
+          tableCategory: normalizeCategoryId(card.tableCategory),
+          isCommander: Boolean(card.isCommander),
           utilityBuckets: normalizeBucketList(card.utilityBuckets),
           autoBuckets: normalizeBucketList(card.autoBuckets),
           oracleTags: normalizeTextArray(card.oracleTags),
@@ -2568,31 +2762,147 @@
         };
       }
 
-      function openRemoveCardModal(card) {
-        if (!card) return;
-        state.pendingRemoveCard = card;
-        const manualValue = normalizeManualManaValue(card.manualManaValue);
-        const detectedValue = getManaValue(card);
-        removeCardModalDetail.textContent = card.name;
-        manualManaValueInput.value = String(manualValue ?? effectiveManaValue(card));
-        manualManaValueDetail.textContent = manualValue === null
-          ? `Detected MV ${detectedValue}. No override active.`
-          : `Detected MV ${detectedValue}. Override active: MV ${manualValue}.`;
-        clearManaValueButton.disabled = manualValue === null;
+      function pendingEditCards() {
+        return (state.pendingEditCards || []).filter(card => state.cards.some(item => item.id === card.id));
+      }
+
+      function tableCategoryOverride(card) {
+        return normalizeCategoryId(card.tableCategory);
+      }
+
+      function renderCardStatsCategoryChecks(targets) {
+        cardStatsCategoryChecks.innerHTML = "";
+        const definitions = allStatsCategoryDefinitions();
+        if (!definitions.length) {
+          const empty = document.createElement("p");
+          empty.className = "hint-line";
+          empty.textContent = "No custom stats categories yet.";
+          cardStatsCategoryChecks.appendChild(empty);
+          return;
+        }
+        for (const category of definitions) {
+          const checkedCount = targets.filter(card => effectiveStatsCategoryIds(card).includes(category.id)).length;
+          const label = document.createElement("label");
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.value = category.id;
+          input.checked = checkedCount === targets.length;
+          input.indeterminate = checkedCount > 0 && checkedCount < targets.length;
+          input.dataset.wasIndeterminate = input.indeterminate ? "1" : "";
+          input.addEventListener("change", () => {
+            input.indeterminate = false;
+            input.dataset.wasIndeterminate = "";
+          });
+          label.append(input, document.createTextNode(category.label));
+          cardStatsCategoryChecks.appendChild(label);
+        }
+      }
+
+      function syncTableSectionEditorState() {
+        const targets = pendingEditCards();
+        const locked = commanderTagInput.checked || targets.some(card => hasType(card, "land"));
+        tableSectionSelect.disabled = locked;
+        tableSectionDetail.textContent = locked
+          ? "Lands and commander-tagged cards keep their dedicated table sections."
+          : "Automatic uses detected Magic type; custom placement is reset by Reset Positions.";
+      }
+
+      function openRemoveCardModal(cardOrCards) {
+        const cards = Array.isArray(cardOrCards) ? cardOrCards : [cardOrCards].filter(Boolean);
+        const targets = [...new Set(cards)].filter(card => state.cards.some(item => item.id === card.id));
+        if (!targets.length) return;
+        state.pendingEditCards = targets;
+        const firstCard = targets[0];
+        const commanderCount = targets.filter(card => card.isCommander).length;
+        commanderTagInput.checked = commanderCount === targets.length;
+        commanderTagInput.indeterminate = commanderCount > 0 && commanderCount < targets.length;
+        commanderTagInput.dataset.wasIndeterminate = commanderTagInput.indeterminate ? "1" : "";
+
+        tableSectionSelect.innerHTML = "";
+        const automatic = document.createElement("option");
+        automatic.value = "";
+        automatic.textContent = "Automatic detected type";
+        tableSectionSelect.appendChild(automatic);
+        for (const section of tableSectionDefinitions()) {
+          if (section.id === "commanders") continue;
+          const option = document.createElement("option");
+          option.value = section.id;
+          option.textContent = tableSectionDisplayLabel(section);
+          tableSectionSelect.appendChild(option);
+        }
+        const overrides = targets.map(tableCategoryOverride);
+        const sameOverride = overrides.every(value => value === overrides[0]) ? overrides[0] : "";
+        tableSectionSelect.value = sameOverride;
+        syncTableSectionEditorState();
+
+        const manualValue = normalizeManualManaValue(firstCard.manualManaValue);
+        const detectedValue = getManaValue(firstCard);
+        removeCardModalDetail.textContent = targets.length === 1 ? firstCard.name : `${targets.length} selected cards`;
+        manualManaValueInput.disabled = targets.length !== 1;
+        saveManaValueButton.disabled = targets.length !== 1;
+        clearManaValueButton.disabled = targets.length !== 1 || manualValue === null;
+        manualManaValueInput.value = targets.length === 1 ? String(manualValue ?? effectiveManaValue(firstCard)) : "";
+        manualManaValueDetail.textContent = targets.length === 1
+          ? (manualValue === null
+            ? `Detected MV ${detectedValue}. No override active.`
+            : `Detected MV ${detectedValue}. Override active: MV ${manualValue}.`)
+          : "Mana value override edits one card at a time.";
+        renderCardStatsCategoryChecks(targets);
+        confirmRemoveCardButton.disabled = targets.length !== 1;
         removeCardModalBackdrop.hidden = false;
         window.setTimeout(() => {
+          if (manualManaValueInput.disabled) return;
           manualManaValueInput.focus();
           manualManaValueInput.select();
         }, 0);
       }
 
       function closeRemoveCardModal() {
-        state.pendingRemoveCard = null;
+        state.pendingEditCards = [];
+        commanderTagInput.indeterminate = false;
+        commanderTagInput.dataset.wasIndeterminate = "";
         removeCardModalBackdrop.hidden = true;
       }
 
+      function saveCardEdits() {
+        const targets = pendingEditCards();
+        if (!targets.length) {
+          closeRemoveCardModal();
+          return;
+        }
+        const before = snapshotTableState();
+        const keepCommanderState = commanderTagInput.indeterminate || commanderTagInput.dataset.wasIndeterminate === "1";
+        const makeCommander = commanderTagInput.checked;
+        const tableCategory = normalizeCategoryId(tableSectionSelect.value);
+        const statInputs = [...cardStatsCategoryChecks.querySelectorAll("input[type='checkbox']")];
+        for (const card of targets) {
+          if (!keepCommanderState) {
+            card.isCommander = makeCommander;
+          }
+          if (card.isCommander || hasType(card, "land")) {
+            card.tableCategory = "";
+          } else {
+            card.tableCategory = tableCategory;
+          }
+          const statsCategories = new Set(effectiveStatsCategoryIds(card));
+          for (const input of statInputs) {
+            if (input.indeterminate || input.dataset.wasIndeterminate === "1") continue;
+            if (input.checked) statsCategories.add(input.value);
+            else statsCategories.delete(input.value);
+          }
+          card.statsCategories = normalizeStatsCategoryList([...statsCategories]);
+          delete card.manualPosition;
+        }
+        rememberTableSnapshot(before);
+        layoutCards();
+        updateStatsAndBuckets();
+        updateHistoryButtons();
+        closeRemoveCardModal();
+        setStatus("Card edits saved", `${targets.length} card${targets.length === 1 ? "" : "s"} updated on the tabletop.`);
+      }
+
       function saveManualManaValue() {
-        const card = state.pendingRemoveCard;
+        const [card] = pendingEditCards();
         if (!card || !state.cards.some(item => item.id === card.id)) {
           closeRemoveCardModal();
           return;
@@ -2619,7 +2929,7 @@
       }
 
       function clearManualManaValue() {
-        const card = state.pendingRemoveCard;
+        const [card] = pendingEditCards();
         if (!card || !state.cards.some(item => item.id === card.id)) {
           closeRemoveCardModal();
           return;
@@ -2640,7 +2950,7 @@
       }
 
       function confirmRemoveCard() {
-        const card = state.pendingRemoveCard;
+        const [card] = pendingEditCards();
         if (!card || !state.cards.some(item => item.id === card.id)) {
           closeRemoveCardModal();
           return;
@@ -2664,7 +2974,7 @@
         const element = document.createElement("article");
         element.className = "card is-loading";
         element.dataset.cardId = card.id;
-        element.dataset.category = card.category;
+        element.dataset.category = currentTableCategory(card);
         element.dataset.manaValue = String(effectiveManaValue(card));
         element.setAttribute("aria-label", card.name);
         element.innerHTML = `
@@ -2679,7 +2989,10 @@
         element.addEventListener("contextmenu", event => {
           event.preventDefault();
           if (state.suppressContextMenu) return;
-          openRemoveCardModal(card);
+          const targets = state.selectedCardIds.has(card.id) && state.selectedCardIds.size > 1
+            ? orderedSelectedCards()
+            : [card];
+          openRemoveCardModal(targets);
         });
         element.addEventListener("dblclick", event => {
           if (event.target.closest(".face-toggle")) return;
@@ -2760,12 +3073,12 @@
 
       function groupCards(cards) {
         const groups = new Map();
-        for (const category of CATEGORY_ORDER) groups.set(category.id, []);
+        for (const category of tableSectionDefinitions(cards)) groups.set(category.id, []);
         groups.set("lands", []);
 
         for (const card of cards) {
-          card.category = normalizeCategoryId(card.category) || categorize(card);
-          const target = groups.get(card.category) || groups.get("other");
+          const category = currentTableCategory(card);
+          const target = groups.get(category) || groups.get("others");
           target.push(card);
         }
 
@@ -2819,7 +3132,7 @@
 
       function getLayoutManaValues(cards) {
         const manaValues = cards
-          .filter(card => card.category !== "lands")
+          .filter(card => currentTableCategory(card) !== "lands")
           .map(effectiveManaValue)
           .filter(Number.isFinite);
         if (!manaValues.length) return [];
@@ -2831,6 +3144,7 @@
       function computeLayout(cards, structureCards = cards) {
         const groups = groupCards(cards);
         const structureGroups = groupCards(structureCards);
+        const tableSections = tableSectionDefinitions(structureCards);
         const layoutManaValues = getLayoutManaValues(structureCards);
         const firstManaValue = layoutManaValues[0] ?? 1;
         const activeRows = [];
@@ -2843,9 +3157,8 @@
         let maxY = TOP_MM + CARD_MM.height;
         let nonLandMaxX = LEFT_MM + CARD_MM.width;
 
-        for (const category of CATEGORY_ORDER) {
+        for (const category of tableSections) {
           const structureGroup = structureGroups.get(category.id) || [];
-          if (!structureGroup.length) continue;
           activeRows.push({
             category,
             group: groups.get(category.id) || [],
@@ -2879,7 +3192,7 @@
         }
 
         const manualEntries = structureCards
-          .filter(card => card.category !== "lands" && card.manualPosition)
+          .filter(card => currentTableCategory(card) !== "lands" && card.manualPosition)
           .map(card => ({ card, position: getLiveCardPosition(card) || card.manualPosition }))
           .filter(entry => entry.position)
           .sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y);
@@ -2928,7 +3241,7 @@
             visualColumns.set(key, (visualColumns.get(key) || 0) + 1);
           }
           const categoryHeight = Math.max(CARD_MM.height + ROW_GAP_MM, measureCategoryHeight(visualCards, firstManaValue, y));
-          labels.push({ id: category.id, label: category.label, count: structureGroup.length, x: LEFT_MM, y: y - 28 });
+          labels.push({ id: category.id, label: tableSectionDisplayLabel(category), count: structureGroup.length, x: LEFT_MM, y: y - 28 });
 
           for (const manaValue of layoutManaValues) {
             const x = manaColumnX(manaValue, firstManaValue);
@@ -3446,7 +3759,7 @@
 
         for (const card of state.cards) {
           const element = ensureCardElement(card);
-          element.dataset.category = card.category;
+          element.dataset.category = currentTableCategory(card);
           element.dataset.manaValue = String(effectiveManaValue(card));
           if (card.manualPosition) {
             setElementPosition(element, card.manualPosition.x, card.manualPosition.y);
@@ -3616,6 +3929,7 @@
         if (!state.selectedCardIds.size) return;
         state.selectedCardIds.clear();
         syncSelectionStyles();
+        updateHistoryButtons();
       }
 
       function selectCards(cards, label = "Selected") {
@@ -3624,6 +3938,7 @@
           if (card?.id) state.selectedCardIds.add(card.id);
         }
         syncSelectionStyles();
+        updateHistoryButtons();
         setStatus(label, state.selectedCardIds.size ? `${state.selectedCardIds.size} matching card${state.selectedCardIds.size === 1 ? "" : "s"} selected.` : "No matching cards.");
       }
 
@@ -3801,8 +4116,8 @@
 
       function buildStatsData() {
         const total = state.cards.length;
-        const lands = state.cards.filter(card => card.category === "lands");
-        const nonlands = state.cards.filter(card => card.category !== "lands");
+        const lands = state.cards.filter(card => detectedMainCategory(card) === "lands");
+        const nonlands = state.cards.filter(card => detectedMainCategory(card) !== "lands");
         const avgMana = nonlands.length
           ? (nonlands.reduce((sum, card) => sum + effectiveManaValue(card), 0) / nonlands.length).toFixed(2)
           : "0.00";
@@ -3813,9 +4128,9 @@
           return { label: `MV ${value}`, count: cards.length, cards };
         });
         const typeRows = [
-          ...CATEGORY_ORDER.map(category => ({
+          ...CATEGORY_ORDER.filter(category => !category.special).map(category => ({
             label: category.label,
-            cards: state.cards.filter(card => card.category === category.id)
+            cards: state.cards.filter(card => detectedMainCategory(card) === category.id)
           })),
           { label: "Lands", cards: lands }
         ].filter(row => row.cards.length).map(row => ({ ...row, count: row.cards.length }));
@@ -4191,6 +4506,7 @@
           }
         }
         syncSelectionStyles();
+        updateHistoryButtons();
       }
 
       function suppressNextContextMenu() {
@@ -4281,9 +4597,17 @@
 
       function assignTableCategory(card, category) {
         const targetCategory = normalizeCategoryId(category);
-        if (!card || !targetCategory || targetCategory === "lands" || card.category === "lands") return false;
-        if (card.category === targetCategory) return false;
-        card.category = targetCategory;
+        if (!card || !targetCategory || targetCategory === "lands" || hasType(card, "land")) return false;
+        if (targetCategory === "commanders") {
+          if (card.isCommander) return false;
+          card.isCommander = true;
+          card.tableCategory = "";
+          return true;
+        }
+        if (card.isCommander) return false;
+        if (normalizeCategoryId(card.tableCategory) === targetCategory) return false;
+        const automaticCategory = state.showSubtypes ? (subtypeCategoryFor(card) || detectedMainCategory(card)) : detectedMainCategory(card);
+        card.tableCategory = targetCategory === automaticCategory ? "" : targetCategory;
         return true;
       }
 
@@ -4297,7 +4621,7 @@
 
       function baseAnchorHasCards(anchor, excludedIds) {
         for (const other of state.cards) {
-          if (excludedIds.has(other.id) || other.category === "lands") continue;
+          if (excludedIds.has(other.id) || currentTableCategory(other) === "lands") continue;
           const position = getLiveCardPosition(other);
           if (!position) continue;
           const sameColumn = Math.abs(position.x - anchor.x) <= SNAP_X_MM;
@@ -4347,7 +4671,7 @@
             return {
               card: other,
               position,
-              category: tableCategoryAtPosition(position) || other.category
+              category: tableCategoryAtPosition(position) || currentTableCategory(other)
             };
           })
           .filter(entry => entry.position && entry.category);
@@ -4361,7 +4685,7 @@
           if (!nearest || score < nearest.score) nearest = { ...entry, score };
         }
         if (nearest && Math.abs(probeX - (nearest.position.x + CARD_MM.width / 2)) <= SNAP_X_MM) {
-          const targetCategory = nearest.category || nearest.card.category;
+          const targetCategory = nearest.category || currentTableCategory(nearest.card);
           const sameColumnEntries = entries
             .filter(entry =>
               entry.category === targetCategory &&
@@ -4399,7 +4723,7 @@
                 const index = clamp(Math.round((probeY - baseY - CARD_MM.height / 2) / STACK_OFFSET_MM), 0, stackEntries.length);
                 const canonicalColumn = stackEntries.every(entry =>
                   !entry.card.manualPosition &&
-                  entry.card.category === targetCategory &&
+                  currentTableCategory(entry.card) === targetCategory &&
                   effectiveManaValue(entry.card) === effectiveManaValue(card)
                 );
                 stackCandidate = {
@@ -4454,7 +4778,7 @@
         state.labelsHidden = true;
         hideSnapGuide();
         layoutCards();
-        setStatus("Aligned", `${card.name} snapped into ${categoryLabel(targetCategory || card.category)}. Hold Shift while dropping to place freely.`);
+        setStatus("Aligned", `${card.name} snapped into ${categoryLabel(targetCategory || currentTableCategory(card))}. Hold Shift while dropping to place freely.`);
       }
 
       function applyGroupSnap(drag, candidate) {
@@ -4482,7 +4806,7 @@
         state.labelsHidden = true;
         hideSnapGuide();
         layoutCards();
-        setStatus("Aligned", `${movingCards.length} selected cards snapped into ${categoryLabel(targetCategory || movingCards[0]?.category)}.`);
+        setStatus("Aligned", `${movingCards.length} selected cards snapped into ${categoryLabel(targetCategory || currentTableCategory(movingCards[0]))}.`);
       }
 
       function attachCardDrag(element, card) {
@@ -4884,8 +5208,10 @@
         nameDeckButton.disabled = isLoading;
         autoBucketsButton.disabled = isLoading || !state.cards.length;
         addBucketButton.disabled = isLoading;
+        toggleSubtypesButton.disabled = isLoading;
+        addTableSectionButton.disabled = isLoading;
         addStatsCategoryButton.disabled = isLoading;
-        editStatsCategoriesButton.disabled = isLoading;
+        editTableSelectionButton.disabled = isLoading || !state.selectedCardIds.size;
         stopButton.disabled = !isLoading;
         updateHistoryButtons();
       }
@@ -4922,8 +5248,10 @@
           nextOrder: state.nextOrder,
           z: state.z,
           labelsHidden: state.labelsHidden,
+          showSubtypes: state.showSubtypes,
           deckTitle: state.deckTitle,
           decklist: decklistInput.value,
+          customTableSections: normalizeCustomTableSections(state.customTableSections),
           cards: state.cards.map(serializeBoardCard)
         };
       }
@@ -4936,6 +5264,8 @@
         const usedIds = new Set();
         const currentBuckets = currentBucketStateById();
         const currentStatsCategories = currentStatsCategoryStateById();
+        state.customTableSections = normalizeCustomTableSections(snapshot.customTableSections);
+        state.showSubtypes = Boolean(snapshot.showSubtypes);
         state.cards = snapshot.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
         for (const card of state.cards) {
           applyCardBucketState(card, currentBuckets.get(card.id));
@@ -5003,7 +5333,7 @@
       function updateHistoryButtons() {
         undoButton.disabled = state.undoStack.length === 0;
         redoButton.disabled = state.redoStack.length === 0;
-        resetPositionsButton.disabled = !state.cards.some(card => card.manualPosition) && !state.labelsHidden;
+        resetPositionsButton.disabled = !state.cards.some(card => card.manualPosition || normalizeCategoryId(card.tableCategory)) && !state.labelsHidden;
         undoBucketsButton.disabled = state.bucketUndoStack.length === 0;
         redoBucketsButton.disabled = state.bucketRedoStack.length === 0;
         resetBucketsButton.disabled = state.loading || !state.cards.length;
@@ -5011,6 +5341,11 @@
         importLayoutButton.disabled = state.loading;
         autoBucketsButton.disabled = state.loading || !state.cards.length;
         addBucketButton.disabled = state.loading;
+        toggleSubtypesButton.disabled = state.loading;
+        addTableSectionButton.disabled = state.loading;
+        addStatsCategoryButton.disabled = state.loading;
+        editTableSelectionButton.disabled = state.loading || !state.selectedCardIds.size;
+        toggleSubtypesButton.textContent = state.showSubtypes ? "Hide Subtypes" : "Show Subtypes";
       }
 
       function undoMove() {
@@ -5080,6 +5415,7 @@
         state.nextOrder = 1;
         for (const [index, card] of state.cards.entries()) {
           delete card.manualPosition;
+          card.tableCategory = "";
           card.order = Number.isFinite(card.initialOrder) ? card.initialOrder : index + 1;
           state.nextOrder = Math.max(state.nextOrder, card.order + 1);
           if (card.element) card.element.style.zIndex = String(31 + index);
@@ -5166,6 +5502,7 @@
         state.abortController = new AbortController();
         state.cards = [];
         state.customBuckets = [];
+        state.customTableSections = [];
         state.customStatsCategories = [];
         state.activeBucketFilter = "";
         clearSelection();
@@ -5177,6 +5514,7 @@
         state.bucketUndoStack = [];
         state.bucketRedoStack = [];
         state.labelsHidden = false;
+        state.showSubtypes = false;
         state.previewCard = null;
         state.lastFetchStartedAt = 0;
         state.fetchStartTimes = [];
@@ -5215,7 +5553,7 @@
           layoutCards();
           await cacheCardImages(card);
           renderCardImage(card);
-          setStatus("Placed", `${card.name} -> ${categoryLabel(card.category)} | MV ${effectiveManaValue(card)}`, (index + 1) / names.length);
+          setStatus("Placed", `${card.name} -> ${categoryLabel(currentTableCategory(card))} | MV ${effectiveManaValue(card)}`, (index + 1) / names.length);
 
           if (state.placementDelay > 0) {
             await wait(state.placementDelay);
@@ -5244,6 +5582,7 @@
         state.abortController?.abort();
         state.cards = [];
         state.customBuckets = [];
+        state.customTableSections = [];
         state.customStatsCategories = [];
         state.activeBucketFilter = "";
         clearSelection();
@@ -5255,6 +5594,7 @@
         state.bucketUndoStack = [];
         state.bucketRedoStack = [];
         state.labelsHidden = false;
+        state.showSubtypes = false;
         state.previewCard = null;
         setDeckTitle("", { status: false });
         decklistInput.value = "";
@@ -5298,13 +5638,23 @@
         undoButton.addEventListener("click", undoMove);
         redoButton.addEventListener("click", redoMove);
         resetPositionsButton.addEventListener("click", resetPositions);
+        toggleSubtypesButton.addEventListener("click", () => {
+          state.showSubtypes = !state.showSubtypes;
+          layoutCards();
+          updateHistoryButtons();
+          setStatus(
+            state.showSubtypes ? "Subtypes shown" : "Subtypes hidden",
+            state.showSubtypes ? "Detected Scryfall subtypes now have their own table rows." : "Table rows are back to main Magic types."
+          );
+        });
+        addTableSectionButton.addEventListener("click", promptAddCustomTableSection);
+        editTableSelectionButton.addEventListener("click", () => openRemoveCardModal(orderedSelectedCards()));
         saveLayoutButton.addEventListener("click", saveLayoutBundle);
         autoBucketsButton.addEventListener("click", () => autoBucketWithHistory({ force: false }));
         undoBucketsButton.addEventListener("click", undoBuckets);
         redoBucketsButton.addEventListener("click", redoBuckets);
         resetBucketsButton.addEventListener("click", resetBucketsToAuto);
         addStatsCategoryButton.addEventListener("click", promptAddCustomStatsCategory);
-        editStatsCategoriesButton.addEventListener("click", () => openStatsCategoryEditor());
         createStatsCategoryButton.addEventListener("click", addStatsCategoryFromEditor);
         newStatsCategoryNameInput.addEventListener("keydown", event => {
           if (event.key !== "Enter") return;
@@ -5331,6 +5681,12 @@
         bucketModalBackdrop.addEventListener("pointerdown", event => {
           if (event.target === bucketModalBackdrop) closeBucketEditor({ restoreCustomBuckets: true });
         });
+        commanderTagInput.addEventListener("change", () => {
+          commanderTagInput.indeterminate = false;
+          commanderTagInput.dataset.wasIndeterminate = "";
+          syncTableSectionEditorState();
+        });
+        saveCardEditsButton.addEventListener("click", saveCardEdits);
         saveManaValueButton.addEventListener("click", saveManualManaValue);
         clearManaValueButton.addEventListener("click", clearManualManaValue);
         manualManaValueInput.addEventListener("keydown", event => {
@@ -5376,7 +5732,9 @@
         clearSelection();
         hideSelectionBox();
         state.customBuckets = normalizeCustomBuckets(cards.customBuckets);
+        state.customTableSections = normalizeCustomTableSections(cards.customTableSections);
         state.customStatsCategories = normalizeCustomStatsCategories(cards.customStatsCategories);
+        state.showSubtypes = Boolean(cards.showSubtypes);
         state.activeBucketFilter = normalizeBucketFilter(cards.activeBucketFilter);
         state.cards = cards.map((card, index) => ({
           id: card.id || `test-${index}`,
@@ -5402,6 +5760,8 @@
           autoBuckets: normalizeBucketList(card.autoBuckets),
           oracleTags: normalizeTextArray(card.oracleTags),
           statsCategories: normalizeStatsCategoryList(card.statsCategories),
+          tableCategory: normalizeCategoryId(card.tableCategory),
+          isCommander: Boolean(card.isCommander),
           bucketEdited: Boolean(card.bucketEdited),
           category: categorize(card),
           order: Number.isFinite(card.order) ? card.order : index + 1,
