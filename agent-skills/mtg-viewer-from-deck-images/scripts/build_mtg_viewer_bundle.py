@@ -28,7 +28,7 @@ BASIC_NAMES = {
 }
 LAST_REQUEST_AT = 0.0
 MIN_REQUEST_INTERVAL = 0.16
-SAVE_VERSION = 2
+SAVE_VERSION = 3
 
 
 def throttle():
@@ -332,6 +332,7 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
         "activeFaceIndex": 0,
         "typeLine": type_line,
         "manaValue": int(canonical.get("cmc") or chosen.get("cmc") or 0),
+        "manualManaValue": None,
         "manaCost": mana_cost(canonical) or mana_cost(chosen),
         "oracleText": oracle_text(canonical) or oracle_text(chosen),
         "oracleId": canonical.get("oracle_id") or chosen.get("oracle_id") or "",
@@ -346,6 +347,7 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
         "error": "" if image_uri else "Image not found",
         "order": order,
         "initialOrder": order,
+        "bucketOrder": order,
         "manualPosition": None,
         "zIndex": "",
     }
@@ -431,6 +433,7 @@ def main():
         "customBuckets": [],
         "layout": {
             "nextOrder": len(cards) + 1,
+            "nextBucketOrder": len(cards) + 1,
             "z": 30 + len(cards),
             "labelsHidden": False,
             "activeBucketFilter": "",
