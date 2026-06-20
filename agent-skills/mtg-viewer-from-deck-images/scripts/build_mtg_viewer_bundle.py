@@ -442,6 +442,7 @@ def main():
             "z": 30 + len(cards),
             "labelsHidden": False,
             "showSubtypes": False,
+            "activeSubtypeSections": [],
             "activeBucketFilter": "",
             "camera": {"x": 0, "y": 0, "scale": 0.84},
         },

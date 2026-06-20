@@ -598,6 +598,42 @@
       font-weight: 750;
     }
 
+    .subtype-section-list {
+      display: grid;
+      gap: 8px;
+      max-height: min(52vh, 460px);
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .subtype-section-list details {
+      border: 1px solid rgba(143, 182, 255, 0.18);
+      border-radius: 8px;
+      background: rgba(10, 16, 25, 0.72);
+    }
+
+    .subtype-section-list summary {
+      cursor: pointer;
+      padding: 10px;
+      color: #dbe7f7;
+      font-weight: 850;
+    }
+
+    .subtype-checks {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 8px;
+      padding: 0 10px 10px;
+    }
+
+    .subtype-checks label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #c6d4e8;
+      font-weight: 700;
+    }
+
     input[type="range"] {
       width: 100%;
       accent-color: var(--accent);
@@ -1088,6 +1124,7 @@
 
         <div class="button-row">
           <button id="toggle-subtypes" type="button">Show Subtypes</button>
+          <button id="edit-subtypes" type="button">Subtype Sections</button>
           <button id="add-table-section" type="button">Add Table Type</button>
           <button id="add-stats-category" type="button">Add Stats Category</button>
           <button id="edit-table-selection" type="button">Edit Selected</button>
@@ -1198,6 +1235,19 @@
     </section>
   </div>
 
+  <div id="subtype-modal-backdrop" class="modal-backdrop" hidden>
+    <section class="bucket-modal" role="dialog" aria-modal="true" aria-labelledby="subtype-modal-title">
+      <h2 id="subtype-modal-title">Subtype Sections</h2>
+      <p class="subtle">Open a type, then choose which detected subtypes become their own tabletop rows.</p>
+      <div id="subtype-section-list" class="subtype-section-list"></div>
+      <div class="button-row">
+        <button id="save-subtypes" class="primary" type="button">Save Subtypes</button>
+        <button id="clear-subtypes" type="button">Clear Subtypes</button>
+        <button id="cancel-subtypes" type="button">Cancel</button>
+      </div>
+    </section>
+  </div>
+
   <div id="remove-card-modal-backdrop" class="modal-backdrop" hidden>
     <section class="bucket-modal" role="dialog" aria-modal="true" aria-labelledby="remove-card-modal-title">
       <h2 id="remove-card-modal-title">Edit Card</h2>
@@ -1254,8 +1304,8 @@
       const HISTORY_LIMIT = 5;
       const SAVE_VERSION = 3;
       const CATEGORY_ORDER = [
-        { id: "creatures", label: "Creatures", test: card => hasType(card, "creature") },
         { id: "commanders", label: "Commanders", test: card => Boolean(card.isCommander), special: true },
+        { id: "creatures", label: "Creatures", test: card => hasType(card, "creature") },
         { id: "planeswalkers", label: "Planeswalkers", test: card => hasType(card, "planeswalker") },
         { id: "enchantments", label: "Enchantments", test: card => isStandaloneEnchantment(card) },
         { id: "artifacts", label: "Artifacts", test: card => isStandaloneArtifact(card) },
@@ -1318,6 +1368,7 @@
         suppressContextMenu: false,
         viewMode: "table",
         showSubtypes: false,
+        activeSubtypeSections: [],
         activeBucketFilter: "",
         bucketEntries: [],
         bucketSnapAnchors: [],
@@ -1355,6 +1406,7 @@
       const redoButton = document.getElementById("redo-move");
       const resetPositionsButton = document.getElementById("reset-positions");
       const toggleSubtypesButton = document.getElementById("toggle-subtypes");
+      const editSubtypesButton = document.getElementById("edit-subtypes");
       const addTableSectionButton = document.getElementById("add-table-section");
       const editTableSelectionButton = document.getElementById("edit-table-selection");
       const undoBucketsButton = document.getElementById("undo-buckets");
@@ -1401,6 +1453,11 @@
       const saveStatsCategoriesButton = document.getElementById("save-stats-categories");
       const clearStatsCategoriesButton = document.getElementById("clear-stats-categories");
       const cancelStatsCategoriesButton = document.getElementById("cancel-stats-categories");
+      const subtypeModalBackdrop = document.getElementById("subtype-modal-backdrop");
+      const subtypeSectionList = document.getElementById("subtype-section-list");
+      const saveSubtypesButton = document.getElementById("save-subtypes");
+      const clearSubtypesButton = document.getElementById("clear-subtypes");
+      const cancelSubtypesButton = document.getElementById("cancel-subtypes");
       const removeCardModalBackdrop = document.getElementById("remove-card-modal-backdrop");
       const removeCardModalDetail = document.getElementById("remove-card-modal-detail");
       const commanderTagInput = document.getElementById("commander-tag");
@@ -1578,7 +1635,7 @@
 
       function typeParts(card) {
         const [front] = typeText(card).split(/\s+\/\/\s+/);
-        const [main = "", subtype = ""] = String(front || "").split(/[—–]/);
+        const [main = "", subtype = ""] = String(front || "").split(/\s+[—–-]\s+/);
         return { main, subtype };
       }
 
@@ -1622,14 +1679,12 @@
         return category?.id || "others";
       }
 
-      function subtypeCategoryFor(card) {
-        const parent = detectedMainCategory(card);
-        if (parent === "lands" || parent === "others") return "";
-        const [subtype] = subtypeTokens(card);
-        return subtype ? sectionIdFromLabel(`subtype-${parent}`, subtype) : "";
+      function subtypeOtherId(parent) {
+        return `subtype-${parent}-others`;
       }
 
       function subtypeLabelForId(id) {
+        if (String(id || "").endsWith("-others")) return "Others";
         const match = String(id || "").match(/^subtype-[^-]+-(.+)$/);
         if (!match) return "";
         const slug = match[1];
@@ -1646,6 +1701,49 @@
         return match ? normalizeCategoryId(match[1]) : "";
       }
 
+      function normalizeSubtypeSectionList(value) {
+        return normalizeTextArray(value)
+          .map(normalizeCategoryId)
+          .filter(id => id.startsWith("subtype-") && !id.endsWith("-others"));
+      }
+
+      function activeSubtypeSet() {
+        return new Set(normalizeSubtypeSectionList(state.activeSubtypeSections));
+      }
+
+      function hasActiveSubtypesForParent(parent) {
+        return normalizeSubtypeSectionList(state.activeSubtypeSections).some(id => subtypeParentForId(id) === parent);
+      }
+
+      function presentSubtypeGroups(cards = state.cards) {
+        const groups = new Map();
+        for (const card of cards) {
+          const parent = detectedMainCategory(card);
+          if (parent === "lands") continue;
+          for (const subtype of subtypeTokens(card)) {
+            const id = sectionIdFromLabel(`subtype-${parent}`, subtype);
+            if (!groups.has(parent)) groups.set(parent, new Map());
+            const entry = groups.get(parent).get(id) || { id, label: subtype, parent, count: 0 };
+            entry.count += 1;
+            groups.get(parent).set(id, entry);
+          }
+        }
+        return groups;
+      }
+
+      function activeSubtypeCategoryFor(card) {
+        const parent = detectedMainCategory(card);
+        if (parent === "lands") return "";
+        const active = activeSubtypeSet();
+        const activeForParent = normalizeSubtypeSectionList(state.activeSubtypeSections).filter(id => subtypeParentForId(id) === parent);
+        if (!activeForParent.length) return "";
+        for (const subtype of subtypeTokens(card)) {
+          const id = sectionIdFromLabel(`subtype-${parent}`, subtype);
+          if (active.has(id)) return id;
+        }
+        return subtypeOtherId(parent);
+      }
+
       function currentTableCategory(card) {
         if (hasType(card, "land")) return "lands";
         if (card.isCommander) return "commanders";
@@ -1654,10 +1752,13 @@
           if (!state.showSubtypes && override.startsWith("subtype-")) {
             return subtypeParentForId(override) || detectedMainCategory(card);
           }
+          if (state.showSubtypes && DEFAULT_TABLE_SECTION_IDS.has(override) && hasActiveSubtypesForParent(override)) {
+            return subtypeOtherId(override);
+          }
           return override;
         }
         if (state.showSubtypes) {
-          const subtypeCategory = subtypeCategoryFor(card);
+          const subtypeCategory = activeSubtypeCategoryFor(card);
           if (subtypeCategory) return subtypeCategory;
         }
         return detectedMainCategory(card);
@@ -1777,6 +1878,8 @@
       function categoryLabel(id) {
         id = normalizeCategoryId(id) || id;
         if (id === "lands") return "Lands";
+        const builtin = CATEGORY_ORDER.find(category => category.id === id);
+        if (builtin) return builtin.label;
         const definition = tableSectionDefinitions().find(category => category.id === id);
         if (definition) return definition.label;
         if (String(id || "").startsWith("subtype-")) return subtypeLabelForId(id);
@@ -1865,22 +1968,19 @@
       function tableSectionDefinitions(cards = state.cards) {
         if (!cards.length) return [];
         const definitions = [];
-        const byParent = new Map();
-        for (const card of cards) {
-          const parent = detectedMainCategory(card);
-          if (parent === "lands" || parent === "others") continue;
-          for (const subtype of subtypeTokens(card)) {
-            const id = sectionIdFromLabel(`subtype-${parent}`, subtype);
-            if (!byParent.has(parent)) byParent.set(parent, new Map());
-            byParent.get(parent).set(id, { id, label: subtype, parent, subtype: true });
-          }
-        }
+        const byParent = presentSubtypeGroups(cards);
+        const active = activeSubtypeSet();
         const hasCommanders = cards.some(card => card.isCommander || normalizeCategoryId(card.tableCategory) === "commanders");
         for (const category of CATEGORY_ORDER) {
           if (category.id === "commanders" && !hasCommanders) continue;
-          definitions.push({ id: category.id, label: category.label, main: true });
-          if (state.showSubtypes && byParent.has(category.id)) {
-            definitions.push(...[...byParent.get(category.id).values()].sort((a, b) => a.label.localeCompare(b.label)));
+          const subtypeRows = byParent.has(category.id)
+            ? [...byParent.get(category.id).values()].filter(section => active.has(section.id)).sort((a, b) => a.label.localeCompare(b.label))
+            : [];
+          if (state.showSubtypes && subtypeRows.length) {
+            definitions.push(...subtypeRows.map(section => ({ ...section, subtype: true })));
+            definitions.push({ id: subtypeOtherId(category.id), label: "Others", parent: category.id, subtype: true, subtypeOthers: true });
+          } else {
+            definitions.push({ id: category.id, label: category.label, main: true });
           }
         }
         definitions.push(...normalizeCustomTableSections(state.customTableSections).map(section => ({ ...section, custom: true })));
@@ -2446,6 +2546,7 @@
             z: state.z,
             labelsHidden: state.labelsHidden,
             showSubtypes: state.showSubtypes,
+            activeSubtypeSections: normalizeSubtypeSectionList(state.activeSubtypeSections),
             activeBucketFilter: state.activeBucketFilter,
             camera: { ...state.camera }
           },
@@ -2631,6 +2732,7 @@
         state.bucketRedoStack = [];
         state.labelsHidden = Boolean(bundle.layout?.labelsHidden);
         state.showSubtypes = Boolean(bundle.layout?.showSubtypes);
+        state.activeSubtypeSections = normalizeSubtypeSectionList(bundle.layout?.activeSubtypeSections);
         state.activeBucketFilter = normalizeBucketFilter(bundle.layout?.activeBucketFilter);
         setDeckTitle(bundle.deckTitle || "", { status: false });
         state.previewCard = null;
@@ -4199,6 +4301,67 @@
         }
       }
 
+      function renderSubtypeEditor() {
+        subtypeSectionList.innerHTML = "";
+        const groups = presentSubtypeGroups();
+        const active = activeSubtypeSet();
+        const categories = CATEGORY_ORDER.filter(category => !category.special && groups.has(category.id));
+        if (!categories.length) {
+          const empty = document.createElement("p");
+          empty.className = "hint-line";
+          empty.textContent = "No subtypes detected in the current deck.";
+          subtypeSectionList.appendChild(empty);
+          return;
+        }
+        for (const category of categories) {
+          const sections = [...groups.get(category.id).values()].sort((a, b) => a.label.localeCompare(b.label));
+          const activeCount = sections.filter(section => active.has(section.id)).length;
+          const details = document.createElement("details");
+          details.open = activeCount > 0;
+          const summary = document.createElement("summary");
+          summary.textContent = `${category.label} ${activeCount}/${sections.length}`;
+          details.appendChild(summary);
+          const checks = document.createElement("div");
+          checks.className = "subtype-checks";
+          for (const section of sections) {
+            const label = document.createElement("label");
+            const input = document.createElement("input");
+            input.type = "checkbox";
+            input.value = section.id;
+            input.checked = active.has(section.id);
+            label.append(input, document.createTextNode(`${section.label} ${section.count}`));
+            checks.appendChild(label);
+          }
+          details.appendChild(checks);
+          subtypeSectionList.appendChild(details);
+        }
+      }
+
+      function openSubtypeEditor() {
+        renderSubtypeEditor();
+        subtypeModalBackdrop.hidden = false;
+      }
+
+      function closeSubtypeEditor() {
+        subtypeModalBackdrop.hidden = true;
+      }
+
+      function applySubtypeEditor(clear = false) {
+        const selected = clear
+          ? []
+          : [...subtypeSectionList.querySelectorAll("input[type='checkbox']:checked")].map(input => input.value);
+        state.activeSubtypeSections = normalizeSubtypeSectionList(selected);
+        closeSubtypeEditor();
+        layoutCards();
+        updateHistoryButtons();
+        setStatus(
+          clear ? "Subtypes cleared" : "Subtypes updated",
+          state.activeSubtypeSections.length
+            ? `${state.activeSubtypeSections.length} subtype section${state.activeSubtypeSections.length === 1 ? "" : "s"} activated.`
+            : "No subtype sections are active."
+        );
+      }
+
       function appendStatsCategoryCheck(category, targets, options = {}) {
         const checkedCount = targets.filter(card => effectiveStatsCategoryIds(card).includes(category.id)).length;
         const label = document.createElement("label");
@@ -4606,7 +4769,7 @@
         }
         if (card.isCommander) return false;
         if (normalizeCategoryId(card.tableCategory) === targetCategory) return false;
-        const automaticCategory = state.showSubtypes ? (subtypeCategoryFor(card) || detectedMainCategory(card)) : detectedMainCategory(card);
+        const automaticCategory = state.showSubtypes ? (activeSubtypeCategoryFor(card) || detectedMainCategory(card)) : detectedMainCategory(card);
         card.tableCategory = targetCategory === automaticCategory ? "" : targetCategory;
         return true;
       }
@@ -5209,6 +5372,7 @@
         autoBucketsButton.disabled = isLoading || !state.cards.length;
         addBucketButton.disabled = isLoading;
         toggleSubtypesButton.disabled = isLoading;
+        editSubtypesButton.disabled = isLoading || !state.cards.length;
         addTableSectionButton.disabled = isLoading;
         addStatsCategoryButton.disabled = isLoading;
         editTableSelectionButton.disabled = isLoading || !state.selectedCardIds.size;
@@ -5249,6 +5413,7 @@
           z: state.z,
           labelsHidden: state.labelsHidden,
           showSubtypes: state.showSubtypes,
+          activeSubtypeSections: normalizeSubtypeSectionList(state.activeSubtypeSections),
           deckTitle: state.deckTitle,
           decklist: decklistInput.value,
           customTableSections: normalizeCustomTableSections(state.customTableSections),
@@ -5266,6 +5431,7 @@
         const currentStatsCategories = currentStatsCategoryStateById();
         state.customTableSections = normalizeCustomTableSections(snapshot.customTableSections);
         state.showSubtypes = Boolean(snapshot.showSubtypes);
+        state.activeSubtypeSections = normalizeSubtypeSectionList(snapshot.activeSubtypeSections);
         state.cards = snapshot.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
         for (const card of state.cards) {
           applyCardBucketState(card, currentBuckets.get(card.id));
@@ -5342,6 +5508,7 @@
         autoBucketsButton.disabled = state.loading || !state.cards.length;
         addBucketButton.disabled = state.loading;
         toggleSubtypesButton.disabled = state.loading;
+        editSubtypesButton.disabled = state.loading || !state.cards.length;
         addTableSectionButton.disabled = state.loading;
         addStatsCategoryButton.disabled = state.loading;
         editTableSelectionButton.disabled = state.loading || !state.selectedCardIds.size;
@@ -5515,6 +5682,7 @@
         state.bucketRedoStack = [];
         state.labelsHidden = false;
         state.showSubtypes = false;
+        state.activeSubtypeSections = [];
         state.previewCard = null;
         state.lastFetchStartedAt = 0;
         state.fetchStartTimes = [];
@@ -5595,6 +5763,7 @@
         state.bucketRedoStack = [];
         state.labelsHidden = false;
         state.showSubtypes = false;
+        state.activeSubtypeSections = [];
         state.previewCard = null;
         setDeckTitle("", { status: false });
         decklistInput.value = "";
@@ -5644,9 +5813,12 @@
           updateHistoryButtons();
           setStatus(
             state.showSubtypes ? "Subtypes shown" : "Subtypes hidden",
-            state.showSubtypes ? "Detected Scryfall subtypes now have their own table rows." : "Table rows are back to main Magic types."
+            state.showSubtypes
+              ? (state.activeSubtypeSections.length ? "Activated subtypes are now shown as table rows." : "No subtype sections are active yet.")
+              : "Table rows are back to main Magic types."
           );
         });
+        editSubtypesButton.addEventListener("click", openSubtypeEditor);
         addTableSectionButton.addEventListener("click", promptAddCustomTableSection);
         editTableSelectionButton.addEventListener("click", () => openRemoveCardModal(orderedSelectedCards()));
         saveLayoutButton.addEventListener("click", saveLayoutBundle);
@@ -5666,6 +5838,12 @@
         cancelStatsCategoriesButton.addEventListener("click", () => closeStatsCategoryEditor({ restore: true }));
         statsCategoryModalBackdrop.addEventListener("pointerdown", event => {
           if (event.target === statsCategoryModalBackdrop) closeStatsCategoryEditor({ restore: true });
+        });
+        saveSubtypesButton.addEventListener("click", () => applySubtypeEditor(false));
+        clearSubtypesButton.addEventListener("click", () => applySubtypeEditor(true));
+        cancelSubtypesButton.addEventListener("click", closeSubtypeEditor);
+        subtypeModalBackdrop.addEventListener("pointerdown", event => {
+          if (event.target === subtypeModalBackdrop) closeSubtypeEditor();
         });
         addBucketButton.addEventListener("click", promptAddCustomBucket);
         editBucketsButton.addEventListener("click", () => openBucketEditor());
@@ -5735,6 +5913,7 @@
         state.customTableSections = normalizeCustomTableSections(cards.customTableSections);
         state.customStatsCategories = normalizeCustomStatsCategories(cards.customStatsCategories);
         state.showSubtypes = Boolean(cards.showSubtypes);
+        state.activeSubtypeSections = normalizeSubtypeSectionList(cards.activeSubtypeSections);
         state.activeBucketFilter = normalizeBucketFilter(cards.activeBucketFilter);
         state.cards = cards.map((card, index) => ({
           id: card.id || `test-${index}`,
