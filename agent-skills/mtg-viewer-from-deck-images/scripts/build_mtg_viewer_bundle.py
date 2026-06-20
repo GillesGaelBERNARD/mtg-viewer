@@ -286,10 +286,14 @@ def category_for(type_line):
         return "spacecraft"
     if "planeswalker" in text:
         return "planeswalkers"
-    if any(word in text for word in ("enchantment", "equipment", "artifact")):
-        return "enchantments-equipment-artifacts"
-    if "instant" in text or "sorcery" in text:
-        return "instants-rituals"
+    if "enchantment" in text:
+        return "enchantments"
+    if "artifact" in text or "equipment" in text:
+        return "artifacts"
+    if "instant" in text:
+        return "instants"
+    if "sorcery" in text:
+        return "rituals"
     return "other"
 
 
@@ -343,6 +347,7 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
         "utilityBuckets": [],
         "autoBuckets": [],
         "oracleTags": [],
+        "statsCategories": [],
         "bucketEdited": False,
         "error": "" if image_uri else "Image not found",
         "order": order,
@@ -431,6 +436,7 @@ def main():
         "deckTitle": args.title,
         "decklist": "\n".join(decklist_lines),
         "customBuckets": [],
+        "customStatsCategories": [],
         "layout": {
             "nextOrder": len(cards) + 1,
             "nextBucketOrder": len(cards) + 1,

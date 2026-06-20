@@ -1103,12 +1103,21 @@
 
       <section class="panel-view" id="panel-stats" hidden>
         <p class="hint-line">Stats are shown on the table. Use pan, zoom, fit, and center to inspect the board.</p>
+        <div class="button-row">
+          <button id="add-stats-category" type="button">Add Category</button>
+          <button id="edit-stats-categories" type="button">Edit Selected</button>
+        </div>
+        <div class="stats-section">
+          <h2>Custom Categories</h2>
+          <div id="stats-category-list" class="bucket-chip-list"></div>
+        </div>
         <div class="stats-cache" hidden>
           <div id="summary-stats" class="stats-grid"></div>
           <div id="mana-curve-stats"></div>
           <div id="type-stats"></div>
           <div id="color-stats"></div>
           <div id="bucket-stats"></div>
+          <div id="custom-category-stats"></div>
         </div>
       </section>
 
@@ -1159,6 +1168,23 @@
     </section>
   </div>
 
+  <div id="stats-category-modal-backdrop" class="modal-backdrop" hidden>
+    <section class="bucket-modal" role="dialog" aria-modal="true" aria-labelledby="stats-category-modal-title">
+      <h2 id="stats-category-modal-title">Edit Stats Categories</h2>
+      <p id="stats-category-modal-detail" class="subtle"></p>
+      <div id="stats-category-checks" class="bucket-checks"></div>
+      <div class="inline-create">
+        <input id="new-stats-category-name" type="text" autocomplete="off" placeholder="New custom category">
+        <button id="create-stats-category" type="button">Add Category</button>
+      </div>
+      <div class="button-row">
+        <button id="save-stats-categories" class="primary" type="button">Save Categories</button>
+        <button id="clear-stats-categories" type="button">Clear Categories</button>
+        <button id="cancel-stats-categories" type="button">Cancel</button>
+      </div>
+    </section>
+  </div>
+
   <div id="remove-card-modal-backdrop" class="modal-backdrop" hidden>
     <section class="bucket-modal" role="dialog" aria-modal="true" aria-labelledby="remove-card-modal-title">
       <h2 id="remove-card-modal-title">Edit Card</h2>
@@ -1205,8 +1231,10 @@
         { id: "vehicles", label: "Vehicles", test: card => hasType(card, "vehicle") },
         { id: "spacecraft", label: "Spacecraft", test: card => hasType(card, "spacecraft") },
         { id: "planeswalkers", label: "Planeswalkers", test: card => hasType(card, "planeswalker") },
-        { id: "enchantments-equipment-artifacts", label: "Enchantments / Equipment / Artifacts", test: card => isSupportPermanent(card) },
-        { id: "instants-rituals", label: "Instants / Rituals", test: card => hasType(card, "instant") || hasType(card, "sorcery") },
+        { id: "enchantments", label: "Enchantments", test: card => isStandaloneEnchantment(card) },
+        { id: "artifacts", label: "Artifacts", test: card => isStandaloneArtifact(card) },
+        { id: "instants", label: "Instants", test: card => hasType(card, "instant") },
+        { id: "rituals", label: "Rituals", test: card => hasType(card, "sorcery") },
         { id: "other", label: "Other", test: () => true }
       ];
       const COLOR_ORDER = [
@@ -1267,9 +1295,11 @@
         bucketSnapAnchors: [],
         bucketFocusTargets: new Map(),
         customBuckets: [],
+        customStatsCategories: [],
         oracleTagIndex: null,
         oracleTagPromise: null,
         bucketEditor: null,
+        statsCategoryEditor: null,
         pendingRemoveCard: null
       };
 
@@ -1315,6 +1345,10 @@
       const typeStats = document.getElementById("type-stats");
       const colorStats = document.getElementById("color-stats");
       const bucketStats = document.getElementById("bucket-stats");
+      const customCategoryStats = document.getElementById("custom-category-stats");
+      const statsCategoryList = document.getElementById("stats-category-list");
+      const addStatsCategoryButton = document.getElementById("add-stats-category");
+      const editStatsCategoriesButton = document.getElementById("edit-stats-categories");
       const bucketFilterList = document.getElementById("bucket-filter-list");
       const bucketCardList = document.getElementById("bucket-card-list");
       const autoBucketsButton = document.getElementById("auto-buckets");
@@ -1328,6 +1362,14 @@
       const saveBucketsButton = document.getElementById("save-buckets");
       const clearBucketsButton = document.getElementById("clear-buckets");
       const cancelBucketsButton = document.getElementById("cancel-buckets");
+      const statsCategoryModalBackdrop = document.getElementById("stats-category-modal-backdrop");
+      const statsCategoryModalDetail = document.getElementById("stats-category-modal-detail");
+      const statsCategoryChecks = document.getElementById("stats-category-checks");
+      const newStatsCategoryNameInput = document.getElementById("new-stats-category-name");
+      const createStatsCategoryButton = document.getElementById("create-stats-category");
+      const saveStatsCategoriesButton = document.getElementById("save-stats-categories");
+      const clearStatsCategoriesButton = document.getElementById("clear-stats-categories");
+      const cancelStatsCategoriesButton = document.getElementById("cancel-stats-categories");
       const removeCardModalBackdrop = document.getElementById("remove-card-modal-backdrop");
       const removeCardModalDetail = document.getElementById("remove-card-modal-detail");
       const manualManaValueInput = document.getElementById("manual-mana-value");
@@ -1435,6 +1477,33 @@
         updateHistoryButtons();
       }
 
+      function createCustomStatsCategory(label) {
+        const cleanLabel = cleanBucketName(label);
+        if (!cleanLabel) return null;
+        const existing = allStatsCategoryDefinitions().find(category => category.label.toLowerCase() === cleanLabel.toLowerCase());
+        if (existing) return { ...existing, existing: true };
+        const usedIds = new Set(allStatsCategoryDefinitions().map(category => category.id));
+        const category = {
+          id: uniqueBucketId(`stats-${bucketSlug(cleanLabel)}`, usedIds),
+          label: cleanLabel
+        };
+        state.customStatsCategories = normalizeCustomStatsCategories([...state.customStatsCategories, category]);
+        return category;
+      }
+
+      function promptAddCustomStatsCategory() {
+        const label = window.prompt("Custom stats category name");
+        if (label === null) return;
+        const category = createCustomStatsCategory(label);
+        if (!category) {
+          setStatus("No category added", "Enter a name to create a stats category.");
+          return;
+        }
+        updateStatsAndBuckets();
+        if (state.viewMode === "stats") layoutCards();
+        setStatus(category.existing ? "Category exists" : "Category added", `${category.label} is ready for stats-only tagging.`);
+      }
+
       function typeText(card) {
         return String(card.type_line || card.typeLine || "").toLowerCase();
       }
@@ -1443,16 +1512,25 @@
         return typeText(card).includes(type);
       }
 
-      function isSupportPermanent(card) {
+      function isExcludedPermanentSubtype(card) {
         if (hasType(card, "creature") || hasType(card, "vehicle") || hasType(card, "spacecraft") || hasType(card, "planeswalker")) {
-          return false;
+          return true;
         }
-        return hasType(card, "enchantment") || hasType(card, "equipment") || hasType(card, "artifact");
+        return false;
+      }
+
+      function isStandaloneEnchantment(card) {
+        if (isExcludedPermanentSubtype(card)) return false;
+        return hasType(card, "enchantment");
+      }
+
+      function isStandaloneArtifact(card) {
+        if (isExcludedPermanentSubtype(card)) return false;
+        return hasType(card, "artifact") || hasType(card, "equipment");
       }
 
       function normalizeCategoryId(id) {
-        if (id === "enchantments-equipment") return "enchantments-equipment-artifacts";
-        if (id === "enchantments-equipment-artifacts") return id;
+        if (id === "enchantments-equipment" || id === "enchantments-equipment-artifacts" || id === "instants-rituals") return "";
         if (id === "lands") return id;
         return CATEGORY_ORDER.some(category => category.id === id) ? id : "";
       }
@@ -1615,6 +1693,35 @@
         return buckets;
       }
 
+      function normalizeCustomStatsCategories(value) {
+        const usedIds = new Set();
+        const categories = [];
+        for (const item of Array.isArray(value) ? value : []) {
+          const label = cleanBucketName(typeof item === "string" ? item : item?.label || item?.name || item?.id);
+          if (!label) continue;
+          const preferredId = String(item?.id || `stats-${bucketSlug(label)}`);
+          categories.push({ id: uniqueBucketId(preferredId, usedIds), label });
+        }
+        return categories;
+      }
+
+      function allStatsCategoryDefinitions() {
+        return normalizeCustomStatsCategories(state.customStatsCategories);
+      }
+
+      function normalizeStatsCategoryList(value) {
+        const allowed = new Set(allStatsCategoryDefinitions().map(category => category.id));
+        return normalizeTextArray(value).filter(item => allowed.has(item));
+      }
+
+      function statsCategoryLabel(id) {
+        return allStatsCategoryDefinitions().find(category => category.id === id)?.label || id;
+      }
+
+      function effectiveStatsCategoryIds(card) {
+        return normalizeStatsCategoryList(card.statsCategories);
+      }
+
       function allBucketDefinitions() {
         return [...UTILITY_BUCKETS, ...normalizeCustomBuckets(state.customBuckets)];
       }
@@ -1757,6 +1864,7 @@
           utilityBuckets: [],
           autoBuckets: [],
           oracleTags: [],
+          statsCategories: [],
           bucketEdited: false,
           bucketOrder: 0,
           raw
@@ -2146,6 +2254,7 @@
           deckTitle: state.deckTitle,
           decklist: decklistInput.value,
           customBuckets: normalizeCustomBuckets(state.customBuckets),
+          customStatsCategories: normalizeCustomStatsCategories(state.customStatsCategories),
           layout: {
             nextOrder: state.nextOrder,
             nextBucketOrder: state.nextBucketOrder,
@@ -2297,6 +2406,7 @@
           utilityBuckets: normalizeBucketList(saved.utilityBuckets),
           autoBuckets: normalizeBucketList(saved.autoBuckets),
           oracleTags: normalizeTextArray(saved.oracleTags),
+          statsCategories: normalizeStatsCategoryList(saved.statsCategories),
           bucketEdited: Boolean(saved.bucketEdited),
           order: Number.isFinite(Number(saved.order)) ? Number(saved.order) : index + 1,
           initialOrder: Number.isFinite(Number(saved.initialOrder)) ? Number(saved.initialOrder) : index + 1,
@@ -2324,6 +2434,7 @@
         hideSelectionBox();
         const usedIds = new Set();
         state.customBuckets = normalizeCustomBuckets(bundle.customBuckets);
+        state.customStatsCategories = normalizeCustomStatsCategories(bundle.customStatsCategories);
         state.cards = bundle.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
         state.undoStack = [];
         state.redoStack = [];
@@ -2403,6 +2514,7 @@
           utilityBuckets: [],
           autoBuckets: [],
           oracleTags: [],
+          statsCategories: [],
           bucketEdited: false,
           bucketOrder: 0,
           error: message || "Image not found"
@@ -2445,6 +2557,7 @@
           utilityBuckets: normalizeBucketList(card.utilityBuckets),
           autoBuckets: normalizeBucketList(card.autoBuckets),
           oracleTags: normalizeTextArray(card.oracleTags),
+          statsCategories: normalizeStatsCategoryList(card.statsCategories),
           bucketEdited: Boolean(card.bucketEdited),
           error: card.error || "",
           order: card.order,
@@ -3294,6 +3407,10 @@
               <h3>Utility Buckets</h3>
               <div data-stats-section="buckets"></div>
             </section>
+            <section class="stats-board-section wide">
+              <h3>Custom Categories</h3>
+              <div data-stats-section="custom-categories"></div>
+            </section>
           </div>
         `;
         table.appendChild(board);
@@ -3301,12 +3418,13 @@
         renderColorStats(board.querySelector("[data-stats-section='colors']"), data);
         renderStatRows(board.querySelector("[data-stats-section='types']"), data.typeRows, { empty: "Load cards to see type counts." });
         renderStatRows(board.querySelector("[data-stats-section='buckets']"), data.bucketRows, { empty: "No buckets yet." });
+        renderStatRows(board.querySelector("[data-stats-section='custom-categories']"), data.customCategoryRows, { empty: "No custom stats categories yet." });
 
         state.bounds = {
           x: LEFT_MM,
           y: TOP_MM,
           width: 360,
-          height: 310
+          height: 390
         };
         return { positions: new Map(), labels: [], manaLabels: [], snapAnchors: [], bounds: state.bounds };
       }
@@ -3667,6 +3785,20 @@
         return allRows;
       }
 
+      function cardsByStatsCategory(categoryId) {
+        return state.cards.filter(card => effectiveStatsCategoryIds(card).includes(categoryId));
+      }
+
+      function buildStatsCategoryRows() {
+        return allStatsCategoryDefinitions()
+          .map(category => {
+            const cards = cardsByStatsCategory(category.id);
+            return { id: category.id, label: category.label, count: cards.length, cards };
+          })
+          .filter(row => row.count > 0)
+          .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+      }
+
       function buildStatsData() {
         const total = state.cards.length;
         const lands = state.cards.filter(card => card.category === "lands");
@@ -3696,6 +3828,7 @@
         }
         const maxColor = Math.max(1, ...COLOR_ORDER.flatMap(color => [demand[color.id], sources[color.id]]));
         const bucketRows = buildBucketRows();
+        const customCategoryRows = buildStatsCategoryRows();
         return {
           total,
           lands,
@@ -3706,7 +3839,8 @@
           demand,
           sources,
           maxColor,
-          bucketRows
+          bucketRows,
+          customCategoryRows
         };
       }
 
@@ -3723,7 +3857,138 @@
         renderStatRows(typeStats, data.typeRows, { empty: "Load cards to see type counts." });
         renderColorStats(colorStats, data);
         renderStatRows(bucketStats, data.bucketRows, { empty: "No buckets yet." });
+        renderStatRows(customCategoryStats, data.customCategoryRows, { empty: "No custom stats categories yet." });
+        renderStatsCategoryControls(data.customCategoryRows);
         renderBucketControls(data.bucketRows);
+      }
+
+      function renderStatsCategoryControls(categoryRows = buildStatsCategoryRows()) {
+        statsCategoryList.innerHTML = "";
+        const definitions = allStatsCategoryDefinitions();
+        if (!definitions.length) {
+          const empty = document.createElement("p");
+          empty.className = "hint-line";
+          empty.textContent = "No custom stats categories.";
+          statsCategoryList.appendChild(empty);
+          return;
+        }
+        const rowsById = new Map(categoryRows.map(row => [row.id, row]));
+        for (const category of definitions) {
+          const row = rowsById.get(category.id) || { ...category, count: 0, cards: [] };
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "bucket-chip";
+          button.textContent = `${category.label} ${row.count}`;
+          button.addEventListener("click", () => selectCards(row.cards, category.label));
+          statsCategoryList.appendChild(button);
+        }
+      }
+
+      function appendStatsCategoryCheck(category, targets, options = {}) {
+        const checkedCount = targets.filter(card => effectiveStatsCategoryIds(card).includes(category.id)).length;
+        const label = document.createElement("label");
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.value = category.id;
+        input.checked = options.checked ?? checkedCount === targets.length;
+        input.indeterminate = options.indeterminate ?? (checkedCount > 0 && checkedCount < targets.length);
+        input.dataset.wasIndeterminate = input.indeterminate ? "1" : "";
+        input.addEventListener("change", () => {
+          input.indeterminate = false;
+          input.dataset.wasIndeterminate = "";
+        });
+        label.append(input, document.createTextNode(category.label));
+        statsCategoryChecks.appendChild(label);
+        return input;
+      }
+
+      function openStatsCategoryEditor(cards = selectedCards()) {
+        const targets = [...new Set((cards || []).filter(Boolean))];
+        if (!targets.length) {
+          setStatus("No selection", "Select one or more cards before editing stats categories.");
+          return;
+        }
+        state.statsCategoryEditor = {
+          cards: targets,
+          categoriesBefore: normalizeCustomStatsCategories(state.customStatsCategories),
+          cardTagsBefore: new Map(targets.map(card => [card.id, normalizeStatsCategoryList(card.statsCategories)]))
+        };
+        statsCategoryModalDetail.textContent = targets.length === 1
+          ? targets[0].name
+          : `${targets.length} selected cards`;
+        statsCategoryChecks.innerHTML = "";
+        newStatsCategoryNameInput.value = "";
+        for (const category of allStatsCategoryDefinitions()) {
+          appendStatsCategoryCheck(category, targets);
+        }
+        statsCategoryModalBackdrop.hidden = false;
+      }
+
+      function closeStatsCategoryEditor(options = {}) {
+        if (options.restore && state.statsCategoryEditor) {
+          state.customStatsCategories = normalizeCustomStatsCategories(state.statsCategoryEditor.categoriesBefore);
+          for (const card of state.statsCategoryEditor.cards || []) {
+            if (state.statsCategoryEditor.cardTagsBefore.has(card.id)) {
+              card.statsCategories = normalizeStatsCategoryList(state.statsCategoryEditor.cardTagsBefore.get(card.id));
+            }
+          }
+          updateStatsAndBuckets();
+          if (state.viewMode === "stats") layoutCards();
+        }
+        state.statsCategoryEditor = null;
+        statsCategoryModalBackdrop.hidden = true;
+      }
+
+      function addStatsCategoryFromEditor() {
+        const label = cleanBucketName(newStatsCategoryNameInput.value);
+        if (!label) {
+          setStatus("No category added", "Type a custom stats category name first.");
+          return;
+        }
+        const targets = state.statsCategoryEditor?.cards || [];
+        if (!targets.length) return;
+        const category = createCustomStatsCategory(label);
+        newStatsCategoryNameInput.value = "";
+        if (!category) return;
+        const existingInput = [...statsCategoryChecks.querySelectorAll("input[type='checkbox']")].find(input => input.value === category.id);
+        if (existingInput) {
+          existingInput.checked = true;
+          existingInput.indeterminate = false;
+          existingInput.dataset.wasIndeterminate = "";
+        } else {
+          appendStatsCategoryCheck(category, targets, { checked: true, indeterminate: false });
+        }
+        updateStatsAndBuckets();
+        if (state.viewMode === "stats") layoutCards();
+        setStatus(category.existing ? "Category selected" : "Category added", `${category.label} is selected for this stats edit.`);
+      }
+
+      function applyStatsCategoryEditor(clear = false) {
+        const targets = state.statsCategoryEditor?.cards || [];
+        if (!targets.length) {
+          closeStatsCategoryEditor();
+          return;
+        }
+        if (clear) {
+          for (const card of targets) {
+            card.statsCategories = [];
+          }
+        } else {
+          const inputs = [...statsCategoryChecks.querySelectorAll("input[type='checkbox']")];
+          for (const card of targets) {
+            const categories = new Set(effectiveStatsCategoryIds(card));
+            for (const input of inputs) {
+              if (input.indeterminate || input.dataset.wasIndeterminate === "1") continue;
+              if (input.checked) categories.add(input.value);
+              else categories.delete(input.value);
+            }
+            card.statsCategories = normalizeStatsCategoryList([...categories]);
+          }
+        }
+        closeStatsCategoryEditor();
+        updateStatsAndBuckets();
+        if (state.viewMode === "stats") layoutCards();
+        setStatus("Stats categories saved", `${targets.length} card${targets.length === 1 ? "" : "s"} updated.`);
       }
 
       function renderBucketControls(bucketRows = buildBucketRows()) {
@@ -4619,6 +4884,8 @@
         nameDeckButton.disabled = isLoading;
         autoBucketsButton.disabled = isLoading || !state.cards.length;
         addBucketButton.disabled = isLoading;
+        addStatsCategoryButton.disabled = isLoading;
+        editStatsCategoriesButton.disabled = isLoading;
         stopButton.disabled = !isLoading;
         updateHistoryButtons();
       }
@@ -4646,6 +4913,10 @@
         return new Map(state.cards.map(card => [card.id, cardBucketState(card)]));
       }
 
+      function currentStatsCategoryStateById() {
+        return new Map(state.cards.map(card => [card.id, normalizeStatsCategoryList(card.statsCategories)]));
+      }
+
       function snapshotTableState() {
         return {
           nextOrder: state.nextOrder,
@@ -4664,9 +4935,13 @@
         table.querySelectorAll(".card").forEach(card => card.remove());
         const usedIds = new Set();
         const currentBuckets = currentBucketStateById();
+        const currentStatsCategories = currentStatsCategoryStateById();
         state.cards = snapshot.cards.map((card, index) => normalizeImportedCard(card, index, usedIds));
         for (const card of state.cards) {
           applyCardBucketState(card, currentBuckets.get(card.id));
+          if (currentStatsCategories.has(card.id)) {
+            card.statsCategories = normalizeStatsCategoryList(currentStatsCategories.get(card.id));
+          }
         }
         setDeckTitle(snapshot.deckTitle || "", { status: false });
         decklistInput.value = typeof snapshot.decklist === "string" ? snapshot.decklist : state.cards.map(cardDeckLine).join("\n");
@@ -4891,6 +5166,7 @@
         state.abortController = new AbortController();
         state.cards = [];
         state.customBuckets = [];
+        state.customStatsCategories = [];
         state.activeBucketFilter = "";
         clearSelection();
         hideSelectionBox();
@@ -4968,6 +5244,7 @@
         state.abortController?.abort();
         state.cards = [];
         state.customBuckets = [];
+        state.customStatsCategories = [];
         state.activeBucketFilter = "";
         clearSelection();
         hideSelectionBox();
@@ -5026,6 +5303,20 @@
         undoBucketsButton.addEventListener("click", undoBuckets);
         redoBucketsButton.addEventListener("click", redoBuckets);
         resetBucketsButton.addEventListener("click", resetBucketsToAuto);
+        addStatsCategoryButton.addEventListener("click", promptAddCustomStatsCategory);
+        editStatsCategoriesButton.addEventListener("click", () => openStatsCategoryEditor());
+        createStatsCategoryButton.addEventListener("click", addStatsCategoryFromEditor);
+        newStatsCategoryNameInput.addEventListener("keydown", event => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          addStatsCategoryFromEditor();
+        });
+        saveStatsCategoriesButton.addEventListener("click", () => applyStatsCategoryEditor(false));
+        clearStatsCategoriesButton.addEventListener("click", () => applyStatsCategoryEditor(true));
+        cancelStatsCategoriesButton.addEventListener("click", () => closeStatsCategoryEditor({ restore: true }));
+        statsCategoryModalBackdrop.addEventListener("pointerdown", event => {
+          if (event.target === statsCategoryModalBackdrop) closeStatsCategoryEditor({ restore: true });
+        });
         addBucketButton.addEventListener("click", promptAddCustomBucket);
         editBucketsButton.addEventListener("click", () => openBucketEditor());
         createBucketButton.addEventListener("click", addBucketFromEditor);
@@ -5085,6 +5376,7 @@
         clearSelection();
         hideSelectionBox();
         state.customBuckets = normalizeCustomBuckets(cards.customBuckets);
+        state.customStatsCategories = normalizeCustomStatsCategories(cards.customStatsCategories);
         state.activeBucketFilter = normalizeBucketFilter(cards.activeBucketFilter);
         state.cards = cards.map((card, index) => ({
           id: card.id || `test-${index}`,
@@ -5109,6 +5401,7 @@
           utilityBuckets: normalizeBucketList(card.utilityBuckets),
           autoBuckets: normalizeBucketList(card.autoBuckets),
           oracleTags: normalizeTextArray(card.oracleTags),
+          statsCategories: normalizeStatsCategoryList(card.statsCategories),
           bucketEdited: Boolean(card.bucketEdited),
           category: categorize(card),
           order: Number.isFinite(card.order) ? card.order : index + 1,

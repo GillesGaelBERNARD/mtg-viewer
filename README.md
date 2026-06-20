@@ -18,9 +18,9 @@ Highly portable: single file browser app and single file deck save.
 
 ### Automated and interactive tabletop deck view
 - Imports card images from Scryfall by card name.
-- Groups cards into creature, vehicle, spacecraft, planeswalker, enchantments/equipment/artifacts, instant/ritual, other, and land areas.
+- Groups cards into creature, vehicle, spacecraft, planeswalker, enchantment, artifact, instant, ritual, other, and land areas.
 - Aligns non-land cards by mana value.
-- Supports manully overriding the mana value (i.e., for X, XX cards you plan to ideally cast at a given MV)
+- Supports manually overriding the mana value (i.e., for X, XX cards you plan to ideally cast at a given MV).
 - Keeps lands on the right side of the table.
 - Supports free dragging, stack snapping, and between-card insertion while preserving visible stack spacing.
 - Shows a face switch on double-faced cards so you can view the other side.
@@ -33,7 +33,8 @@ Highly portable: single file browser app and single file deck save.
 ![Move history controls](screenshots/zoom.png)
 
 ### Deck stats
-- Stats view for deck summary, mana curve, type counts, color demand/sources, and utility bucket counts.
+- Stats view for deck summary, mana curve, type counts, color demand/sources, utility bucket counts, and stats-only custom categories.
+- Custom stats categories let you count tags such as Equipment without changing tabletop placement or utility buckets.
 
 ![Loaded table overview](screenshots/stats_view.png)
 
