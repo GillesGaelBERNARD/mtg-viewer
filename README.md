@@ -1,6 +1,6 @@
 # MTG Deck Table Viewer
 
-Version: v0.1
+Version: v0.2
 
 A single-file Magic: The Gathering deck viewer for sorting decks and visualizing their stats, with automation and intuitive UI.
 
