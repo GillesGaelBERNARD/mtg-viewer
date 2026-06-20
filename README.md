@@ -30,7 +30,7 @@ It runs fully locally once images are fetched.
 ![Move history controls](screenshots/zoom.png)
 
 ### Deck stats
-- Stats view for deck summary, horizontal mana curve, type counts, color demand/sources, and utility bucket counts.
+- Stats view for deck summary, mana curve, type counts, color demand/sources, and utility bucket counts.
 
 ![Loaded table overview](screenshots/stats_view.png)
 
