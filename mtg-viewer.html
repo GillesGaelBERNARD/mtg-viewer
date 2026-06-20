@@ -1479,29 +1479,64 @@
       const pxToMm = value => value / (MM_TO_PX * viewScale());
       const columnStepMm = () => CARD_MM.width + COLUMN_GAP_MM;
 
-      function cleanDeckLine(line) {
-        return line
+      function parseDecklistLine(line) {
+        let clean = String(line || "")
           .replace(/\s*\/\/.*$/, "")
           .replace(/\s*#.*$/, "")
-          .replace(/^\s*(?:SB:\s*)?\d+\s*[xX]?\s+/, "")
+          .replace(/^\s*SB:\s*/i, "")
           .replace(/\s+\([^)]*\)\s*\d+\s*$/, "")
           .replace(/\s+\[[^\]]+\]\s*$/, "")
           .trim();
+        if (!clean) return null;
+
+        let count = 1;
+        const quantity = clean.match(/^(\d+)\s*[xX]?\s+(.+)$/);
+        if (quantity) {
+          count = Math.max(1, Math.floor(Number(quantity[1])));
+          clean = String(quantity[2] || "").trim();
+        }
+        if (!clean) return null;
+        return { count, name: clean };
+      }
+
+      function cleanDeckLine(line) {
+        return parseDecklistLine(line)?.name || "";
+      }
+
+      function parseDecklistEntries(text) {
+        return String(text || "")
+          .split(/\r?\n/)
+          .map(parseDecklistLine)
+          .filter(Boolean);
       }
 
       function parseDecklist(text) {
-        return text
-          .split(/\r?\n/)
-          .map(cleanDeckLine)
-          .filter(Boolean);
+        return parseDecklistEntries(text).flatMap(entry => Array.from({ length: entry.count }, () => entry.name));
       }
 
       function cardDeckLine(card) {
         return `1 ${card.requestedName || card.name}`;
       }
 
+      function decklistLinesFromCards(cards) {
+        const groups = [];
+        const byName = new Map();
+        for (const card of cards) {
+          const name = String(card.requestedName || card.name || "").trim();
+          if (!name) continue;
+          let group = byName.get(name);
+          if (!group) {
+            group = { name, count: 0 };
+            byName.set(name, group);
+            groups.push(group);
+          }
+          group.count += 1;
+        }
+        return groups.map(group => `${group.count} ${group.name}`);
+      }
+
       function syncDecklistFromCards() {
-        decklistInput.value = state.cards.map(cardDeckLine).join("\n");
+        decklistInput.value = decklistLinesFromCards(state.cards).join("\n");
       }
 
       function cleanDeckTitle(value) {
@@ -2155,6 +2190,42 @@
         };
         refreshHeuristicBuckets(card);
         return card;
+      }
+
+      function cloneCardInstance(template, requestedName = template.requestedName || template.name) {
+        const card = {
+          ...template,
+          id: template.error ? `missing-${crypto.randomUUID()}` : crypto.randomUUID(),
+          requestedName,
+          colors: normalizeColorArray(template.colors),
+          colorIdentity: normalizeColorArray(template.colorIdentity),
+          producedMana: normalizeColorArray(template.producedMana),
+          faces: Array.isArray(template.faces) ? template.faces.map(face => ({ ...face })) : [],
+          utilityBuckets: normalizeBucketList(template.utilityBuckets),
+          autoBuckets: normalizeBucketList(template.autoBuckets),
+          oracleTags: normalizeTextArray(template.oracleTags),
+          statsCategories: normalizeStatsCategoryList(template.statsCategories),
+          order: undefined,
+          initialOrder: undefined,
+          bucketOrder: 0,
+          manualPosition: null,
+          importedZIndex: ""
+        };
+        delete card.element;
+        syncActiveFaceFields(card);
+        return card;
+      }
+
+      function assignNewCardOrder(card) {
+        if (!Number.isFinite(card.order)) {
+          card.order = state.nextOrder++;
+        }
+        if (!Number.isFinite(card.initialOrder)) {
+          card.initialOrder = card.order;
+        }
+        if (!Number.isFinite(Number(card.bucketOrder)) || Number(card.bucketOrder) <= 0) {
+          card.bucketOrder = state.nextBucketOrder++;
+        }
       }
 
       async function rateLimitFetchStart() {
@@ -5626,15 +5697,7 @@
           return null;
         }
 
-        if (!Number.isFinite(card.order)) {
-          card.order = state.nextOrder++;
-        }
-        if (!Number.isFinite(card.initialOrder)) {
-          card.initialOrder = card.order;
-        }
-        if (!Number.isFinite(Number(card.bucketOrder)) || Number(card.bucketOrder) <= 0) {
-          card.bucketOrder = state.nextBucketOrder++;
-        }
+        assignNewCardOrder(card);
         state.cards.push(card);
         const element = ensureCardElement(card);
         element.style.zIndex = String(++state.z);
@@ -5658,8 +5721,9 @@
       }
 
       async function loadDeck() {
-        const names = parseDecklist(decklistInput.value);
-        if (!names.length) {
+        const entries = parseDecklistEntries(decklistInput.value);
+        const totalCards = entries.reduce((total, entry) => total + entry.count, 0);
+        if (!totalCards) {
           setStatus("No cards", "Paste a decklist first.", 0);
           return;
         }
@@ -5691,40 +5755,40 @@
         layoutCards();
         updateHistoryButtons();
         centerTable();
-        setStatus("Loading", `Starting ${names.length} card import.`, 0);
+        setStatus("Loading", `Starting ${totalCards} card import.`, 0);
 
-        for (const [index, name] of names.entries()) {
+        let placedCount = 0;
+        for (const entry of entries) {
           if (state.abortController.signal.aborted) break;
-          const progress = index / names.length;
-          setStatus("Fetching", `${index + 1}/${names.length}: ${name}`, progress);
+          const progress = placedCount / totalCards;
+          const entryLabel = entry.count > 1 ? `${entry.name} x${entry.count}` : entry.name;
+          setStatus("Fetching", `${placedCount + 1}/${totalCards}: ${entryLabel}`, progress);
 
-          let card;
+          let template;
           try {
-            card = await fetchCardByName(name, state.abortController.signal);
+            template = await fetchCardByName(entry.name, state.abortController.signal);
           } catch (error) {
             if (state.abortController.signal.aborted) break;
-            card = createPlaceholderCard(name, error.message);
+            template = createPlaceholderCard(entry.name, error.message);
           }
 
-          if (!Number.isFinite(card.order)) {
-            card.order = state.nextOrder++;
-          }
-          if (!Number.isFinite(card.initialOrder)) {
-            card.initialOrder = card.order;
-          }
-          if (!Number.isFinite(Number(card.bucketOrder)) || Number(card.bucketOrder) <= 0) {
-            card.bucketOrder = state.nextBucketOrder++;
-          }
-          state.cards.push(card);
-          const element = ensureCardElement(card);
-          element.style.zIndex = String(++state.z);
-          layoutCards();
-          await cacheCardImages(card);
-          renderCardImage(card);
-          setStatus("Placed", `${card.name} -> ${categoryLabel(currentTableCategory(card))} | MV ${effectiveManaValue(card)}`, (index + 1) / names.length);
+          for (let copyIndex = 0; copyIndex < entry.count; copyIndex++) {
+            if (state.abortController.signal.aborted) break;
+            const card = copyIndex === 0 ? template : cloneCardInstance(template, entry.name);
+            assignNewCardOrder(card);
+            state.cards.push(card);
+            placedCount += 1;
+            const element = ensureCardElement(card);
+            element.style.zIndex = String(++state.z);
+            layoutCards();
+            await cacheCardImages(card);
+            renderCardImage(card);
+            const copyLabel = entry.count > 1 ? ` (${copyIndex + 1}/${entry.count})` : "";
+            setStatus("Placed", `${card.name}${copyLabel} -> ${categoryLabel(currentTableCategory(card))} | MV ${effectiveManaValue(card)}`, placedCount / totalCards);
 
-          if (state.placementDelay > 0) {
-            await wait(state.placementDelay);
+            if (state.placementDelay > 0) {
+              await wait(state.placementDelay);
+            }
           }
         }
 
@@ -5742,7 +5806,7 @@
           syncDecklistFromCards();
           updateStatsAndBuckets();
           updateHistoryButtons();
-          setStatus("Stopped", `${state.cards.length} cards placed before stopping.`, state.cards.length / names.length);
+          setStatus("Stopped", `${state.cards.length} cards placed before stopping.`, state.cards.length / totalCards);
         }
       }
 
@@ -5989,6 +6053,7 @@
         }
         window.mtgViewer = {
           parseDecklist,
+          parseDecklistEntries,
           cleanDeckLine,
           categorize,
           effectiveManaValue,

@@ -58,10 +58,11 @@ Paste a decklist in this format:
 ```text
 1 Birds of Paradise
 1 Sol Ring
+3 Mountain
 1 Command Tower
 ```
 
-The viewer loads one visual card per non-empty decklist line. Scryfall fetches are paced so large lists load steadily instead of hammering the API.
+The viewer accepts normal quantity prefixes such as `3 Mountain` or `3x Mountain`. Each copy becomes its own movable card on the table with a separate internal id. Scryfall fetches are paced so large lists load steadily instead of hammering the API.
 
 1 click save/import.
 
