@@ -41,7 +41,7 @@ Highly portable: single file browser app and single file deck save.
 ![Loaded table overview](screenshots/stats_view.png)
 
 ### Utility buckets
-- Automated utility Buckets such as Ramp, Card Draw, Removal, Board Wipe, Protection, Tutor, Graveyard, LifeGain, etc. detected from Scryfall Oracle Tags.
+- Automated utility Buckets such as Ramp, Card Draw, Removal, Board Wipe, Protection, Tutor, Graveyard, +1/+1 Counter, LifeGain, etc. detected from Scryfall Oracle Tags.
 - Custom utility Buckets, with manual per-card or multi-card bucket editing.
 - View that shows card references grouped by utility bucket, supports the same inspection/zoom behavior as the table, and lets you drag cards between buckets to edit assignments.
 

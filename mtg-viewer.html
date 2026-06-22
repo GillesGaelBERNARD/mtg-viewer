@@ -1333,6 +1333,7 @@
         { id: "tutor", label: "Tutor", match: ["tutor", "search-library"] },
         { id: "finisher", label: "Finisher", match: ["finisher", "extra-combat", "extra-turn", "win-condition", "overrun"] },
         { id: "payoff", label: "Payoff", match: ["payoff", "lord", "anthem", "doubles", "reward", "storm"] },
+        { id: "plus-one-counters", label: "+1/+1 Counter", match: ["counter-matters", "plus-one-plus-one-counters", "plus-one-plus-one-counter", "p1p1-counters", "p1p1-counter", "proliferate"] },
         { id: "synergy", label: "Synergy", match: ["typal", "theme", "synergy", "cares-about", "counter-matters", "artifact-matters", "landfall"] },
         { id: "mana-fixing", label: "Mana Fixing", match: ["mana-fixing", "fixing", "filter", "any-color", "treasure", "dual-land", "tri-land"] },
         { id: "sacrifice", label: "Sacrifice", match: ["sacrifice", "sacrifice-outlet", "aristocrats", "dies-trigger"] },
@@ -2121,6 +2122,9 @@
         }
         if (/whenever .* draw|whenever .* create|whenever .* deals combat damage|creatures you control|artifacts you control|enchantments you control/.test(text)) {
           buckets.add("payoff");
+        }
+        if (/\+1\/\+1 counters?|plus one plus one counters?|proliferate/.test(text)) {
+          buckets.add("plus-one-counters");
         }
         if (/whenever|if you control|for each|choose a creature type|\+1\/\+1 counter|landfall|proliferate|artifact|enchantment/.test(text)) {
           buckets.add("synergy");
