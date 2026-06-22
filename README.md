@@ -6,7 +6,7 @@ A single-file Magic: The Gathering deck viewer for organizing decks and visualiz
 
 Paste a decklist, get cards images automatically loaded and categorized, visualize the stats, then drag cards around and edit your deck.
 
-It runs fully locally/offline once images are fetched.
+It runs fully locally/offline once cards info and images are fetched.
 
 Highly portable: single file browser app and single file deck save.
 
