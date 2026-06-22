@@ -6,6 +6,7 @@ import json
 import re
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -39,6 +40,8 @@ PLUS_ONE_COUNTER_MATCH = (
     "proliferate",
 )
 PLUS_ONE_COUNTER_TEXT_RE = re.compile(r"\+1/\+1 counters?|plus one plus one counters?|proliferate", re.IGNORECASE)
+MOJIBAKE_MARK_RE = re.compile(r"[\u00c2\u00c3\u00c5\u00e2]")
+UNKNOWN_NAME_RE = re.compile(r"[?\ufffd]")
 
 
 def throttle():
@@ -87,8 +90,32 @@ def request_bytes(url):
         return content_type, response.read()
 
 
+def repair_mojibake_text(value):
+    text = str(value or "")
+    if not MOJIBAKE_MARK_RE.search(text):
+        return text
+    try:
+        decoded = text.encode("cp1252").decode("utf-8")
+    except UnicodeError:
+        return text
+    return decoded if re.search(r"[\u00c0-\u024f\u2018-\u201d]", decoded) else text
+
+
 def clean_name(value):
-    return re.sub(r"\s+", " ", value.replace("\u00a0", " ").strip())
+    text = repair_mojibake_text(value).replace("\u00a0", " ")
+    return unicodedata.normalize("NFC", re.sub(r"\s+", " ", text.strip()))
+
+
+def read_text_file(path):
+    data = Path(path).read_bytes()
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return data.decode("utf-16")
+    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="replace")
 
 
 def parse_line(line, line_no):
@@ -115,7 +142,7 @@ def parse_line(line, line_no):
 
 def parse_decklist(path):
     entries = []
-    for line_no, line in enumerate(Path(path).read_text(encoding="utf-8-sig").splitlines(), 1):
+    for line_no, line in enumerate(read_text_file(path).splitlines(), 1):
         entries.extend(parse_line(line, line_no))
     return entries
 
@@ -191,10 +218,51 @@ def exact_print_match(data, printed):
     return data[0] if data else None
 
 
+def has_unknown_name_chars(name):
+    return bool(UNKNOWN_NAME_RE.search(str(name or "")))
+
+
+def scryfall_unknown_name_pattern(name):
+    parts = []
+    for char in clean_name(name):
+        if char in {"?", "\ufffd"}:
+            parts.append(".")
+        elif char.isspace():
+            parts.append(r"\s+")
+        else:
+            parts.append(re.escape(char).replace("/", r"\/"))
+    return "".join(parts)
+
+
+def best_search_result(data):
+    for card in data:
+        if has_usable_image(card):
+            return card
+    return data[0] if data else None
+
+
+def search_printed_pattern(printed, lang="any"):
+    pattern = scryfall_unknown_name_pattern(printed)
+    if not pattern:
+        raise RuntimeError(f"No usable search pattern for {printed}")
+    query = f"lang:{lang or 'any'} name:/^{pattern}$/"
+    url = f"{API}/cards/search?q={urllib.parse.quote(query)}&unique=prints"
+    data = request_json(url).get("data") or []
+    card = best_search_result(data)
+    if not card:
+        raise RuntimeError(f"No printed-name match for {printed}")
+    return card
+
+
 def search_printed(printed, lang):
     query = f'lang:{lang} "{printed}"'
     url = f"{API}/cards/search?q={urllib.parse.quote(query)}&unique=prints"
-    data = request_json(url).get("data") or []
+    try:
+        data = request_json(url).get("data") or []
+    except RuntimeError:
+        if has_unknown_name_chars(printed):
+            return search_printed_pattern(printed, lang)
+        raise
     card = exact_print_match(data, printed)
     if not card:
         raise RuntimeError(f"No {lang} print for {printed}")
@@ -202,12 +270,17 @@ def search_printed(printed, lang):
 
 
 def named_card(name):
-    exact = f"{API}/cards/named?exact={urllib.parse.quote(name)}"
-    try:
-        return request_json(exact)
-    except RuntimeError:
-        fuzzy = f"{API}/cards/named?fuzzy={urllib.parse.quote(name)}"
-        return request_json(fuzzy)
+    clean = clean_name(name)
+    last_error = None
+    for mode in ("exact", "fuzzy"):
+        url = f"{API}/cards/named?{mode}={urllib.parse.quote(clean)}"
+        try:
+            return request_json(url)
+        except RuntimeError as error:
+            last_error = error
+    if has_unknown_name_chars(clean):
+        return search_printed_pattern(clean, "any")
+    raise last_error
 
 
 def same_language_print(card, lang):
@@ -341,8 +414,14 @@ def auto_bucket_ids(*cards):
     return buckets
 
 
+def requested_name_for_save(requested, chosen):
+    printed = clean_name(chosen.get("printed_name") or "")
+    return printed if has_unknown_name_chars(requested) and printed else clean_name(requested)
+
+
 def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
     card_name = canonical.get("name") or chosen.get("name") or requested
+    requested_name = requested_name_for_save(requested, chosen)
     faces = viewer_faces(chosen, card_name, embed_images)
     active_face = faces[0] if faces else {}
     image_uri = active_face.get("imageUri") or usable_card_image_uri(chosen)
@@ -352,7 +431,7 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
     return {
         "id": f"card-{order:03d}-{card_id}",
         "scryfallId": chosen.get("id") or canonical.get("id") or "",
-        "requestedName": requested,
+        "requestedName": requested_name,
         "name": card_name,
         "imageUri": image_uri,
         "sourceImageUri": image_uri,

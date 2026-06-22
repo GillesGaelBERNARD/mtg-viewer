@@ -57,12 +57,13 @@ Paste a decklist in this format:
 
 ```text
 1 Birds of Paradise
+1 Sirène dompte-tempête
 1 Sol Ring
 3 Mountain
 1 Command Tower
 ```
 
-The viewer accepts normal quantity prefixes such as `3 Mountain` or `3x Mountain`. Each copy becomes its own movable card on the table with a separate internal id. Scryfall fetches are paced so large lists load steadily instead of hammering the API.
+The viewer accepts normal quantity prefixes such as `3 Mountain` or `3x Mountain`, and localized printed names with accents such as `Flibustière à voile volante` or `Persécuteur morne-œil`. Each copy becomes its own movable card on the table with a separate internal id. Scryfall fetches are paced so large lists load steadily instead of hammering the API.
 
 1 click save/import.
 
@@ -97,7 +98,7 @@ Card data and images are loaded from the public Scryfall API. Magic: The Gatheri
 
 ## AI Agent Skill
 
-The repo also includes a separate Codex skill at `agent-skills/mtg-viewer-from-deck-images/`. It guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including language-preserving Scryfall images, duplicate audits, offline image embedding, and multi-face card images.
+The repo also includes a separate Codex skill at `agent-skills/mtg-viewer-from-deck-images/`. It guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including accent-preserving localized titles, language-preserving Scryfall images, duplicate audits, offline image embedding, and multi-face card images.
 
 ## Limitations
 

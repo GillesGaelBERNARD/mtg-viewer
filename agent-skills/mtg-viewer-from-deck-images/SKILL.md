@@ -18,6 +18,7 @@ Create a viewer save, not just a decklist. Read every physical card visible or i
 
 2. Extract a working decklist.
    - Prefer printed card titles exactly as seen.
+   - Preserve accents and ligatures exactly: `Sirène dompte-tempête`, `Flibustière à voile volante`, `Équipier inébranlable`, `Persécuteur morne-œil`. Never replace diacritics with ASCII or `?`.
    - Record language per card or pile when visible or inferable. Use Scryfall language codes such as `en`, `fr`, `de`, `es`, `it`, `pt`, `ja`, `ko`, `ru`, `zhs`, `zht`.
    - Map localized titles to Scryfall canonical English names for identity, but keep the localized print for images.
    - Expand physical cards into quantities. Repeated basics are normal. Other duplicates are allowed unless the user or format forbids them.
@@ -34,6 +35,7 @@ Create a viewer save, not just a decklist. Read every physical card visible or i
    - Use `scripts/build_mtg_viewer_bundle.py`.
    - Input lines may be:
      - `1 Sol Ring`
+     - `1 Sirène dompte-tempête`
      - `1 <printed localized title> | lang=<scryfall-lang-code>`
      - `1 <printed localized title> | lang=<scryfall-lang-code> | name=<canonical English name>`
      - `4 Forest`
