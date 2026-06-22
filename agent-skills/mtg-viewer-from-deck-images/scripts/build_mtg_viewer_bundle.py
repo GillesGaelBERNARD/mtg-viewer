@@ -29,6 +29,16 @@ BASIC_NAMES = {
 LAST_REQUEST_AT = 0.0
 MIN_REQUEST_INTERVAL = 0.16
 SAVE_VERSION = 3
+PLUS_ONE_COUNTER_BUCKET_ID = "plus-one-counters"
+PLUS_ONE_COUNTER_MATCH = (
+    "counter-matters",
+    "plus-one-plus-one-counters",
+    "plus-one-plus-one-counter",
+    "p1p1-counters",
+    "p1p1-counter",
+    "proliferate",
+)
+PLUS_ONE_COUNTER_TEXT_RE = re.compile(r"\+1/\+1 counters?|plus one plus one counters?|proliferate", re.IGNORECASE)
 
 
 def throttle():
@@ -313,6 +323,24 @@ def mana_cost(card):
     return "".join(str(face.get("mana_cost") or "") for face in card.get("card_faces") or [] if face.get("mana_cost"))
 
 
+def auto_bucket_ids(*cards):
+    text_parts = []
+    tag_slugs = []
+    for card in cards:
+        if not card:
+            continue
+        text_parts.extend([oracle_text(card), str(card.get("type_line") or "")])
+        tag_slugs.extend(str(tag or "").lower() for tag in card.get("oracle_tags") or [])
+
+    buckets = []
+    text = "\n".join(text_parts)
+    if PLUS_ONE_COUNTER_TEXT_RE.search(text):
+        buckets.append(PLUS_ONE_COUNTER_BUCKET_ID)
+    elif any(any(token in slug for token in PLUS_ONE_COUNTER_MATCH) for slug in tag_slugs):
+        buckets.append(PLUS_ONE_COUNTER_BUCKET_ID)
+    return buckets
+
+
 def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
     card_name = canonical.get("name") or chosen.get("name") or requested
     faces = viewer_faces(chosen, card_name, embed_images)
@@ -320,6 +348,7 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
     image_uri = active_face.get("imageUri") or usable_card_image_uri(chosen)
     image_data = active_face.get("imageData") or image_data_for(image_uri, embed_images)
     type_line = canonical.get("type_line") or chosen.get("type_line") or ""
+    buckets = auto_bucket_ids(canonical, chosen)
     return {
         "id": f"card-{order:03d}-{card_id}",
         "scryfallId": chosen.get("id") or canonical.get("id") or "",
@@ -342,8 +371,8 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
         "category": category_for(type_line),
         "tableCategory": "",
         "isCommander": False,
-        "utilityBuckets": [],
-        "autoBuckets": [],
+        "utilityBuckets": list(buckets),
+        "autoBuckets": list(buckets),
         "oracleTags": [],
         "statsCategories": [],
         "bucketEdited": False,
