@@ -10,6 +10,8 @@ It runs fully locally/offline once cards info and images are fetched.
 
 Highly portable: single file browser app and single file deck save.
 
+Associated AI Agent skill to create mtg-viewer compatible deck lists from images of physical cards.
+
 ![Loaded table overview](screenshots/overview.png)
 
 ## Features
