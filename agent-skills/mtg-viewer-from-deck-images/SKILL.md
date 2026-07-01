@@ -43,13 +43,17 @@ Create a viewer save, not just a decklist. Read every physical card visible or i
    - Preserve quantity lines in `decklist` (`4 Forest`), but expand `cards[]`; every physical copy must have its own saved card object and unique `id`.
    - Use `--embed-images` when the user wants offline import or when quality matters; this embeds every available non-placeholder card face.
    - Use a clear deck title and save next to the source deck images unless the user gave another destination.
-   - Emit the current viewer save shape: `version: 3`, compact quantity `decklist`, `customBuckets`, `customTableSections`, `customStatsCategories`, `layout.activeBucketFilter`, `layout.nextBucketOrder`, `layout.showSubtypes`, `layout.activeSubtypeSections`, card colors, mana value, optional `manualManaValue`, mana cost, oracle text/id, produced mana, detected `category`, `tableCategory`, `isCommander`, utility bucket fields, stats-category fields, bucket order, and face data.
+   - Emit the current viewer save shape: `version: 3`, compact quantity `decklist`, `deckTitle`, `strategyNotes`, `customBuckets`, `customTableSections`, `customStatsCategories`, `layout.activeBucketFilter`, `layout.nextBucketOrder`, `layout.showSubtypes`, `layout.activeSubtypeSections`, card colors, mana value, optional `manualManaValue`, mana cost, oracle text/id, produced mana, detected `category`, `tableCategory`, `isCommander`, utility bucket fields, stats-category fields, bucket order, and face data.
+   - Set `strategyNotes: ""` unless the source folder or user gives strategy/piloting notes to preserve.
+   - Preserve `producedMana` as Scryfall mana symbols in viewer order: `W`, `U`, `B`, `R`, `G`, then `C` for colorless. Do not drop `C`; the Table view uses it for the Colorless land stack.
+   - Leave generated lands with `tableCategory: ""` and `manualPosition: null` unless the user explicitly asks for a fixed tabletop layout. The viewer auto-sorts unpositioned lands into right-side stacks: Any Color, Colorless, single colors, then present multicolor combinations.
+   - Do not put land cards in the Ramp bucket. Lands may still be in mana-fixing if their text supports it, and land mana grouping comes from `producedMana`.
    - Prefill deterministic utility buckets in both `autoBuckets` and `utilityBuckets`; current local heuristic: `plus-one-counters` when oracle text, face text, or oracle tag slugs contain `+1/+1 counter(s)`, `plus one plus one counter(s)`, `proliferate`, or matching counter tag slugs.
    - Set `manualManaValue: null` unless the user explicitly gives an override. Do not infer overrides from where a physical card sat in a photo.
 
 5. Verify output.
    - Parse the saved JSON.
-   - Confirm `app == "mtg-table-viewer"`, `version == 3`, card count, unique card ids, compact decklist row count, title, `offlineImages`, embedded image count, embedded face image count, missing images, duplicate report.
+   - Confirm `app == "mtg-table-viewer"`, `version == 3`, card count, unique card ids, compact decklist row count, title, `strategyNotes`, `offlineImages`, embedded image count, embedded face image count, missing images, duplicate report, no lands in Ramp, and land mana groups.
    - Optionally import in the viewer or open `mtg-viewer.html` and restore the bundle when layout/visual confidence matters.
    - End with output path and audit facts.
 

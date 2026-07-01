@@ -30,6 +30,15 @@ BASIC_NAMES = {
 LAST_REQUEST_AT = 0.0
 MIN_REQUEST_INTERVAL = 0.16
 SAVE_VERSION = 3
+MANA_COLORS = ("W", "U", "B", "R", "G")
+PRODUCED_MANA_SYMBOLS = (*MANA_COLORS, "C")
+MANA_COLOR_LABELS = {
+    "W": "White",
+    "U": "Blue",
+    "B": "Black",
+    "R": "Red",
+    "G": "Green",
+}
 PLUS_ONE_COUNTER_BUCKET_ID = "plus-one-counters"
 PLUS_ONE_COUNTER_MATCH = (
     "counter-matters",
@@ -376,12 +385,20 @@ def category_for(type_line):
     return "others"
 
 
-def color_array(card, key):
+def symbol_array(card, key, allowed):
     value = card.get(key) or []
     if not isinstance(value, list):
         return []
-    allowed = {"W", "U", "B", "R", "G"}
-    return [item for item in value if item in allowed]
+    found = {str(item).strip().upper() for item in value if str(item).strip().upper() in allowed}
+    return [item for item in allowed if item in found]
+
+
+def color_array(card, key):
+    return symbol_array(card, key, MANA_COLORS)
+
+
+def produced_mana_array(card, key):
+    return symbol_array(card, key, PRODUCED_MANA_SYMBOLS)
 
 
 def oracle_text(card):
@@ -446,7 +463,7 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
         "oracleId": canonical.get("oracle_id") or chosen.get("oracle_id") or "",
         "colors": color_array(canonical, "colors") or color_array(chosen, "colors"),
         "colorIdentity": color_array(canonical, "color_identity") or color_array(chosen, "color_identity"),
-        "producedMana": color_array(chosen, "produced_mana") or color_array(canonical, "produced_mana"),
+        "producedMana": produced_mana_array(chosen, "produced_mana") or produced_mana_array(canonical, "produced_mana"),
         "category": category_for(type_line),
         "tableCategory": "",
         "isCommander": False,
@@ -464,6 +481,18 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
     }
 
 
+def land_mana_group_label(card):
+    produced = card.get("producedMana") or []
+    colors = [symbol for symbol in produced if symbol in MANA_COLORS]
+    if len(colors) == len(MANA_COLORS):
+        return "Any Color"
+    if not colors:
+        return "Colorless"
+    if len(colors) == 1:
+        return MANA_COLOR_LABELS[colors[0]]
+    return "/".join(colors)
+
+
 def audit(cards, decklist_lines):
     names = [card["name"] for card in cards]
     counts = {}
@@ -475,6 +504,12 @@ def audit(cards, decklist_lines):
     missing_images = [card["name"] for card in cards if not card.get("imageUri")]
     embedded = sum(1 for card in cards if card.get("imageData"))
     embedded_faces = sum(1 for card in cards for face in card.get("faces", []) if face.get("imageData"))
+    land_groups = {}
+    for card in cards:
+        if card.get("category") != "lands":
+            continue
+        label = land_mana_group_label(card)
+        land_groups[label] = land_groups.get(label, 0) + 1
     return {
         "cards": len(cards),
         "uniqueCardIds": len(set(ids)),
@@ -482,6 +517,7 @@ def audit(cards, decklist_lines):
         "uniqueNames": len(counts),
         "nonBasicDuplicates": nonbasic_dupes,
         "basicCounts": basics,
+        "landManaGroups": land_groups,
         "missingImages": missing_images,
         "embeddedImages": embedded,
         "embeddedFaceImages": embedded_faces,
@@ -539,6 +575,7 @@ def main():
         "savedAt": dt.datetime.now(dt.timezone.utc).isoformat(),
         "offlineImages": bool(args.embed_images),
         "deckTitle": args.title,
+        "strategyNotes": "",
         "decklist": "\n".join(decklist_lines),
         "customBuckets": [],
         "customTableSections": [],
