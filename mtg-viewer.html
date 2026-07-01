@@ -442,6 +442,10 @@
       left: 78px;
     }
 
+    body:not(.panel-collapsed) #deck-title-banner {
+      display: none;
+    }
+
     body.strategy-mode #controls,
     body.strategy-mode #deck-title-banner,
     body.strategy-mode #table {
@@ -616,8 +620,32 @@
     }
 
     .strategy-notes-shell {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 12px;
       width: min(1120px, calc(100vw - 84px));
       height: min(760px, calc(100vh - 150px));
+    }
+
+    .strategy-deck-title {
+      justify-self: center;
+      max-width: 100%;
+      padding: 8px 12px;
+      border: 1px solid rgba(143, 182, 255, 0.24);
+      border-radius: 8px;
+      background: rgba(13, 19, 29, 0.78);
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.34);
+      color: #eef8ff;
+      font-size: 14px;
+      font-weight: 760;
+      line-height: 1.2;
+      text-align: center;
+      overflow-wrap: anywhere;
+      backdrop-filter: blur(12px);
+    }
+
+    .strategy-deck-title[hidden] {
+      display: none;
     }
 
     .strategy-notes {
@@ -1229,6 +1257,7 @@
     <section id="table" aria-label="Movable card table"></section>
     <section id="strategy-workspace" aria-label="Strategy notes" hidden>
       <div class="strategy-notes-shell">
+        <div id="strategy-deck-title" class="strategy-deck-title" hidden></div>
         <label class="screen-reader-only" for="strategy-notes">Strategy notes</label>
         <textarea id="strategy-notes" class="strategy-notes" spellcheck="true" placeholder="Type notes on how to play this deck: key synergies, sequencing, win conditions, and reminders."></textarea>
       </div>
@@ -1574,6 +1603,7 @@
       const tableTabSubtitle = document.getElementById("table-tab-subtitle");
       const deckTitleDisplay = document.getElementById("deck-title-display");
       const deckTitleBanner = document.getElementById("deck-title-banner");
+      const strategyDeckTitle = document.getElementById("strategy-deck-title");
       const globalViewTabs = document.getElementById("global-view-tabs");
       const viewTabs = [...document.querySelectorAll(".view-tab")];
       const panelViews = [...document.querySelectorAll(".panel-view")];
@@ -1775,6 +1805,8 @@
         deckTitleDisplay.hidden = !state.deckTitle;
         deckTitleBanner.textContent = state.deckTitle;
         deckTitleBanner.hidden = !state.deckTitle;
+        strategyDeckTitle.textContent = state.deckTitle;
+        strategyDeckTitle.hidden = !state.deckTitle;
         nameDeckButton.textContent = state.deckTitle ? "Rename Deck" : "Name Deck";
         if (options.status !== false) {
           setStatus(
