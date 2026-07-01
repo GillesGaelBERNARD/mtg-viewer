@@ -413,7 +413,7 @@
       position: fixed;
       top: 22px;
       left: min(calc(100vw - 430px), calc(min(380px, calc(100vw - 28px)) + 28px));
-      z-index: 9500;
+      z-index: 11000;
       display: grid;
       grid-template-columns: repeat(4, minmax(82px, 1fr));
       gap: 6px;
@@ -428,6 +428,24 @@
 
     body.panel-collapsed #global-view-tabs {
       left: 78px;
+    }
+
+    body.strategy-mode #controls,
+    body.strategy-mode #deck-title-banner,
+    body.strategy-mode #table {
+      display: none;
+    }
+
+    body.strategy-mode #viewport {
+      cursor: default;
+      touch-action: auto;
+    }
+
+    body.strategy-mode #global-view-tabs,
+    body.strategy-mode.panel-collapsed #global-view-tabs {
+      left: 50%;
+      width: min(560px, calc(100vw - 40px));
+      transform: translateX(-50%);
     }
 
     .view-tab {
@@ -569,8 +587,44 @@
       font-weight: 760;
     }
 
+    #strategy-workspace {
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      display: grid;
+      place-items: center;
+      padding: 108px 42px 42px;
+      pointer-events: auto;
+      cursor: default;
+      touch-action: auto;
+    }
+
+    #strategy-workspace[hidden] {
+      display: none;
+    }
+
+    .strategy-notes-shell {
+      width: min(1120px, calc(100vw - 84px));
+      height: min(760px, calc(100vh - 150px));
+    }
+
     .strategy-notes {
-      min-height: min(52vh, 420px);
+      width: 100%;
+      height: 100%;
+      min-height: 420px;
+      margin: 0;
+      resize: none;
+      border-color: rgba(143, 182, 255, 0.32);
+      background:
+        linear-gradient(145deg, rgba(102, 217, 194, 0.06), rgba(143, 182, 255, 0.05)),
+        rgba(9, 13, 20, 0.86);
+      box-shadow:
+        0 22px 64px rgba(0, 0, 0, 0.38),
+        0 0 0 1px rgba(0, 0, 0, 0.26) inset;
+      color: var(--text);
+      font-size: 18px;
+      line-height: 1.55;
+      padding: 24px;
     }
 
     .tool-grid {
@@ -1118,16 +1172,41 @@
         left: 10px;
       }
 
+      body.strategy-mode #global-view-tabs,
+      body.strategy-mode.panel-collapsed #global-view-tabs {
+        top: auto;
+        right: 10px;
+        bottom: 10px;
+        left: 10px;
+        width: auto;
+        transform: none;
+      }
+
       .view-tab {
         padding: 7px 5px;
         font-size: 11px;
+      }
+
+      #strategy-workspace {
+        padding: 18px 12px 84px;
+      }
+
+      .strategy-notes-shell {
+        width: 100%;
+        height: 100%;
+      }
+
+      .strategy-notes {
+        min-height: 0;
+        padding: 16px;
+        font-size: 16px;
       }
 
       .tool-grid {
         grid-template-columns: repeat(4, minmax(0, 1fr));
       }
 
-      textarea {
+      textarea:not(.strategy-notes) {
         height: 142px;
       }
     }
@@ -1136,6 +1215,12 @@
 <body>
   <main id="viewport" aria-label="MTG table surface">
     <section id="table" aria-label="Movable card table"></section>
+    <section id="strategy-workspace" aria-label="Strategy notes" hidden>
+      <div class="strategy-notes-shell">
+        <label class="screen-reader-only" for="strategy-notes">Strategy notes</label>
+        <textarea id="strategy-notes" class="strategy-notes" spellcheck="true" placeholder="Type notes on how to play this deck: key synergies, sequencing, win conditions, and reminders."></textarea>
+      </div>
+    </section>
   </main>
   <div id="deck-title-banner" hidden></div>
   <nav id="global-view-tabs" aria-label="Global views">
@@ -1250,11 +1335,6 @@
           <h2>Cards</h2>
           <div id="bucket-card-list" class="bucket-card-list"></div>
         </div>
-      </section>
-
-      <section class="panel-view" id="panel-strategy" hidden>
-        <label class="screen-reader-only" for="strategy-notes">Strategy notes</label>
-        <textarea id="strategy-notes" class="strategy-notes" spellcheck="true" placeholder="Game plan, mulligans, key synergies, sequencing notes..."></textarea>
       </section>
 
       <div class="status" aria-live="polite">
@@ -1475,6 +1555,7 @@
 
       const viewport = document.getElementById("viewport");
       const table = document.getElementById("table");
+      const strategyWorkspace = document.getElementById("strategy-workspace");
       const controls = document.getElementById("controls");
       const togglePanelButton = document.getElementById("toggle-panel");
       const decklistInput = document.getElementById("decklist");
@@ -4363,6 +4444,12 @@
         if (state.viewMode === "buckets") {
           return renderBucketView();
         }
+        if (state.viewMode === "strategy") {
+          clearStatsView();
+          clearBucketView();
+          state.snapAnchors = [];
+          return { positions: new Map(), labels: [], manaLabels: [], snapAnchors: [], bounds: state.bounds };
+        }
         clearStatsView();
         clearBucketView();
         const autoCards = state.cards.filter(card => !card.manualPosition);
@@ -4560,6 +4647,9 @@
 
       function setViewMode(mode) {
         state.viewMode = ["table", "stats", "buckets", "strategy"].includes(mode) ? mode : "table";
+        const isStrategyView = state.viewMode === "strategy";
+        document.body.classList.toggle("strategy-mode", isStrategyView);
+        strategyWorkspace.hidden = !isStrategyView;
         viewTabs.forEach(tab => tab.classList.toggle("is-active", tab.dataset.view === state.viewMode));
         tableTabSubtitle.hidden = state.viewMode !== "table";
         panelViews.forEach(panel => {
@@ -4570,7 +4660,11 @@
         hideSelectionBox();
         updateStatsAndBuckets();
         layoutCards();
-        fitLoadedCards();
+        if (!isStrategyView) {
+          fitLoadedCards();
+        } else {
+          window.setTimeout(() => strategyNotesInput.focus(), 0);
+        }
         const title = state.viewMode === "table"
           ? "Table view"
           : state.viewMode === "stats"
@@ -5635,7 +5729,7 @@
       function attachSelectionBox() {
         let selection = null;
         viewport.addEventListener("pointerdown", event => {
-          if (event.button !== 2 || event.target.closest("#controls")) return;
+          if (event.button !== 2 || event.target.closest("#controls, #strategy-workspace")) return;
           const start = screenToTablePx(event.clientX, event.clientY);
           selection = {
             pointerId: event.pointerId,
@@ -5712,7 +5806,7 @@
         let pan = null;
         viewport.addEventListener("pointerdown", event => {
           clearCardPreview(true);
-          if (event.button !== 0 || event.target.closest("#controls") || event.target.closest(".card")) return;
+          if (event.button !== 0 || event.target.closest("#controls, #strategy-workspace") || event.target.closest(".card")) return;
           pan = {
             pointerId: event.pointerId,
             x: event.clientX,
@@ -5746,7 +5840,7 @@
 
       function attachWheelZoom() {
         viewport.addEventListener("wheel", event => {
-          if (event.target.closest("#controls")) return;
+          if (event.target.closest("#controls, #strategy-workspace")) return;
           event.preventDefault();
           const direction = event.deltaY < 0 ? 1 : -1;
           const factor = Math.exp(direction * 0.12 * state.zoomSensitivity);
