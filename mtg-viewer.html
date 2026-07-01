@@ -353,6 +353,18 @@
       margin-bottom: 8px;
     }
 
+    .placeholder-card span {
+      display: block;
+    }
+
+    .missing-image-hint {
+      margin-top: 10px;
+      color: rgba(216, 232, 255, 0.72);
+      font-size: 11px;
+      font-weight: 650;
+      line-height: 1.25;
+    }
+
     .zone-note {
       position: absolute;
       width: 320px;
@@ -3618,9 +3630,19 @@
         } else {
           const placeholder = document.createElement("div");
           placeholder.className = "placeholder-card";
-          placeholder.innerHTML = `<div><strong>${escapeHtml(card.name)}</strong><span>${escapeHtml(card.error || "Image not found")}</span></div>`;
+          placeholder.innerHTML = missingImagePlaceholderHtml(card, "Image not found");
           element.replaceChildren(placeholder);
         }
+      }
+
+      function missingImagePlaceholderHtml(card, fallbackMessage = "Image not found") {
+        return `
+          <div>
+            <strong>${escapeHtml(card.name)}</strong>
+            <span>${escapeHtml(card.error || fallbackMessage)}</span>
+            <span class="missing-image-hint">If this looks like a temporary fetch issue, remove it and use Add Card again.</span>
+          </div>
+        `;
       }
 
       function makeFaceToggle(card) {
@@ -4026,7 +4048,7 @@
           image.src = imageUri;
           element.appendChild(image);
         } else {
-          element.innerHTML = `<div class="placeholder-card"><div><strong>${escapeHtml(card.name)}</strong><span>${escapeHtml(card.error || "Image not available")}</span></div></div>`;
+          element.innerHTML = `<div class="placeholder-card">${missingImagePlaceholderHtml(card, "Image not available")}</div>`;
         }
         if (Array.isArray(card.faces) && card.faces.length > 1) {
           const toggle = document.createElement("button");
