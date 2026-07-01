@@ -1,6 +1,6 @@
 # MTG Deck Table Viewer
 
-Version: v0.4
+Version: v0.5
 
 A single-file Magic: The Gathering deck viewer for organizing decks and visualizing their stats, with automation and intuitive UI.
 
@@ -23,7 +23,7 @@ Associated AI Agent skill to create mtg-viewer compatible deck lists from images
 - Imports `.csv` files exported by the MythicTools app after scanning a deck.
 - Groups cards into creature, planeswalker, enchantment, artifact, instant, sorcery, others, and land areas by default.
 - Can activate selected Scryfall-detected subtypes as extra tabletop rows, then show/hide those rows globally.
-- Supports unlimited commander tags; commander-tagged cards appear in their own section under Creatures.
+- Supports actual commander tags and alternate commander tags for cards that could be commanders but stay in the library; each gets its own tabletop section.
 - Aligns non-land cards by mana value.
 - Supports manually overriding the mana value (i.e., for X, XX cards you plan to ideally cast at a given MV).
 - Keeps lands on the right side of the table and auto-sorts them into produced-mana stacks: Any Color, Colorless, single colors, and multicolor combinations.
@@ -38,7 +38,7 @@ Associated AI Agent skill to create mtg-viewer compatible deck lists from images
 ![Move history controls](screenshots/zoom.png)
 
 ### Deck stats
-- Stats view for deck summary, mana curve, type counts, color demand/sources, utility bucket counts, and stats-only custom categories.
+- Stats view for deck summary, exact average lands in the opening 7, mana curve, type counts, color demand/sources, utility bucket counts, and stats-only custom categories.
 - Custom stats categories are edited from the Table tab and let you count tags such as Equipment without changing tabletop placement or utility buckets.
 
 ![Loaded table overview](screenshots/stats_view.png)
@@ -82,7 +82,7 @@ Use **Export mtg-viewer JSON** and **Import mtg-viewer JSON** for portable viewe
 ### Tabletop deck view
 - Drag a card to move it.
 - Use Add Card to append one or more cards to the current table by card name or Scryfall ID.
-- Right-click a card to override its mana value, assign commander/table type/custom stats tags, or remove it after confirmation.
+- Right-click a card to override its mana value, assign commander/alternate commander/table type/custom stats tags, or remove it after confirmation.
 - Use Subtype Sections to activate detected subtypes by main type, then Show Subtypes to reveal only those activated subtype rows. Cards from that type that do not match an activated subtype appear in that type's Others row.
 - Drop near another card to snap into that stack.
 - Hold Shift while dropping to place freely without snapping.
@@ -113,6 +113,6 @@ Card data and images are loaded from the public Scryfall API. Magic: The Gatheri
 
 ## AI Agent Skill
 
-The repo also includes a separate Codex skill at `agent-skills/mtg-viewer-from-deck-images/`. It guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including accent-preserving localized titles, language-preserving Scryfall images, duplicate audits, offline image embedding, multi-face card images, strategy note fields, land produced-mana grouping, and utility bucket compatibility.
+The repo also includes a separate Codex skill at `agent-skills/mtg-viewer-from-deck-images/`. It guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including accent-preserving localized titles, language-preserving Scryfall images, duplicate audits, offline image embedding, multi-face card images, strategy note fields, actual/alternate commander fields, land produced-mana grouping, and utility bucket compatibility.
 
 ![Loaded table overview](screenshots/from_cards_pic_to_digital_deck.png)

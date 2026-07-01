@@ -1461,6 +1461,10 @@
         <input id="commander-tag" type="checkbox">
         <span>Commander tag</span>
       </label>
+      <label class="check-row">
+        <input id="alternate-commander-tag" type="checkbox">
+        <span>Alternate commander tag</span>
+      </label>
       <div class="field">
         <label for="table-section-select">Table type</label>
         <select id="table-section-select"></select>
@@ -1510,6 +1514,7 @@
       const SAVE_VERSION = 3;
       const CATEGORY_ORDER = [
         { id: "commanders", label: "Commanders", test: card => Boolean(card.isCommander), special: true },
+        { id: "alternate-commanders", label: "Alternate Commanders", test: card => Boolean(card.isAlternateCommander), special: true },
         { id: "creatures", label: "Creatures", test: card => hasType(card, "creature") },
         { id: "planeswalkers", label: "Planeswalkers", test: card => hasType(card, "planeswalker") },
         { id: "enchantments", label: "Enchantments", test: card => isStandaloneEnchantment(card) },
@@ -1683,6 +1688,7 @@
       const removeCardModalBackdrop = document.getElementById("remove-card-modal-backdrop");
       const removeCardModalDetail = document.getElementById("remove-card-modal-detail");
       const commanderTagInput = document.getElementById("commander-tag");
+      const alternateCommanderTagInput = document.getElementById("alternate-commander-tag");
       const tableSectionSelect = document.getElementById("table-section-select");
       const tableSectionDetail = document.getElementById("table-section-detail");
       const manualManaValueInput = document.getElementById("manual-mana-value");
@@ -2049,6 +2055,7 @@
       function currentTableCategory(card) {
         if (hasType(card, "land")) return "lands";
         if (card.isCommander) return "commanders";
+        if (card.isAlternateCommander) return "alternate-commanders";
         const override = normalizeCategoryId(card.tableCategory);
         if (override && override !== "lands") {
           if (!state.showSubtypes && override.startsWith("subtype-")) {
@@ -2280,9 +2287,8 @@
         const definitions = [];
         const byParent = presentSubtypeGroups(cards);
         const active = activeSubtypeSet();
-        const hasCommanders = cards.some(card => card.isCommander || normalizeCategoryId(card.tableCategory) === "commanders");
         for (const category of CATEGORY_ORDER) {
-          if (category.id === "commanders" && !hasCommanders) continue;
+          if (category.special && !cards.some(card => category.test(card))) continue;
           const subtypeRows = byParent.has(category.id)
             ? [...byParent.get(category.id).values()].filter(section => active.has(section.id)).sort((a, b) => a.label.localeCompare(b.label))
             : [];
@@ -2469,6 +2475,7 @@
           category: categorize(raw),
           tableCategory: "",
           isCommander: false,
+          isAlternateCommander: false,
           utilityBuckets: [],
           autoBuckets: [],
           oracleTags: [],
@@ -3224,6 +3231,7 @@
           category: normalizeCategoryId(String(saved.category || "")) || categorize({ type_line: typeLine }),
           tableCategory: normalizeCategoryId(String(saved.tableCategory || "")),
           isCommander: Boolean(saved.isCommander),
+          isAlternateCommander: Boolean(saved.isAlternateCommander),
           error: String(saved.error || ""),
           utilityBuckets: normalizeBucketList(saved.utilityBuckets),
           autoBuckets: normalizeBucketList(saved.autoBuckets),
@@ -3241,6 +3249,7 @@
             y: Number(saved.manualPosition.y)
           };
         }
+        if (card.isCommander) card.isAlternateCommander = false;
         card.utilityBuckets = normalizeBucketListForCard(card, card.utilityBuckets);
         card.autoBuckets = normalizeBucketListForCard(card, card.autoBuckets);
         syncActiveFaceFields(card);
@@ -3341,6 +3350,7 @@
           category: "others",
           tableCategory: "",
           isCommander: false,
+          isAlternateCommander: false,
           utilityBuckets: [],
           autoBuckets: [],
           oracleTags: [],
@@ -3386,6 +3396,7 @@
           category: normalizeCategoryId(card.category) || detectedMainCategory(card),
           tableCategory: normalizeCategoryId(card.tableCategory),
           isCommander: Boolean(card.isCommander),
+          isAlternateCommander: Boolean(card.isAlternateCommander),
           utilityBuckets: normalizeBucketListForCard(card, card.utilityBuckets),
           autoBuckets: normalizeBucketListForCard(card, card.autoBuckets),
           oracleTags: normalizeTextArray(card.oracleTags),
@@ -3438,10 +3449,10 @@
 
       function syncTableSectionEditorState() {
         const targets = pendingEditCards();
-        const locked = commanderTagInput.checked || targets.some(card => hasType(card, "land"));
+        const locked = commanderTagInput.checked || alternateCommanderTagInput.checked || targets.some(card => hasType(card, "land"));
         tableSectionSelect.disabled = locked;
         tableSectionDetail.textContent = locked
-          ? "Lands and commander-tagged cards keep their dedicated table sections."
+          ? "Lands, commanders, and alternate commanders keep their dedicated table sections."
           : "Automatic uses detected Magic type; custom placement is reset by Reset Positions.";
       }
 
@@ -3455,6 +3466,10 @@
         commanderTagInput.checked = commanderCount === targets.length;
         commanderTagInput.indeterminate = commanderCount > 0 && commanderCount < targets.length;
         commanderTagInput.dataset.wasIndeterminate = commanderTagInput.indeterminate ? "1" : "";
+        const alternateCommanderCount = targets.filter(card => card.isAlternateCommander).length;
+        alternateCommanderTagInput.checked = alternateCommanderCount === targets.length;
+        alternateCommanderTagInput.indeterminate = alternateCommanderCount > 0 && alternateCommanderCount < targets.length;
+        alternateCommanderTagInput.dataset.wasIndeterminate = alternateCommanderTagInput.indeterminate ? "1" : "";
 
         tableSectionSelect.innerHTML = "";
         const automatic = document.createElement("option");
@@ -3462,7 +3477,7 @@
         automatic.textContent = "Automatic detected type";
         tableSectionSelect.appendChild(automatic);
         for (const section of tableSectionDefinitions()) {
-          if (section.id === "commanders") continue;
+          if (section.id === "commanders" || section.id === "alternate-commanders") continue;
           const option = document.createElement("option");
           option.value = section.id;
           option.textContent = tableSectionDisplayLabel(section);
@@ -3499,6 +3514,8 @@
         state.pendingEditCards = [];
         commanderTagInput.indeterminate = false;
         commanderTagInput.dataset.wasIndeterminate = "";
+        alternateCommanderTagInput.indeterminate = false;
+        alternateCommanderTagInput.dataset.wasIndeterminate = "";
         removeCardModalBackdrop.hidden = true;
       }
 
@@ -3511,13 +3528,21 @@
         const before = snapshotTableState();
         const keepCommanderState = commanderTagInput.indeterminate || commanderTagInput.dataset.wasIndeterminate === "1";
         const makeCommander = commanderTagInput.checked;
+        const keepAlternateCommanderState = alternateCommanderTagInput.indeterminate || alternateCommanderTagInput.dataset.wasIndeterminate === "1";
+        const makeAlternateCommander = alternateCommanderTagInput.checked;
         const tableCategory = normalizeCategoryId(tableSectionSelect.value);
         const statInputs = [...cardStatsCategoryChecks.querySelectorAll("input[type='checkbox']")];
         for (const card of targets) {
           if (!keepCommanderState) {
             card.isCommander = makeCommander;
           }
-          if (card.isCommander || hasType(card, "land")) {
+          if (!keepAlternateCommanderState) {
+            card.isAlternateCommander = makeAlternateCommander;
+          }
+          if (!keepCommanderState && makeCommander) card.isAlternateCommander = false;
+          if (!keepAlternateCommanderState && makeAlternateCommander) card.isCommander = false;
+          if (card.isCommander) card.isAlternateCommander = false;
+          if (card.isCommander || card.isAlternateCommander || hasType(card, "land")) {
             card.tableCategory = "";
           } else {
             card.tableCategory = tableCategory;
@@ -4449,6 +4474,7 @@
               ["Cards", data.total],
               ["Lands", data.lands.length],
               ["Nonlands", data.nonlands.length],
+              ["Avg Lands in Opening 7", data.avgOpeningLands],
               ["Avg MV", data.avgMana]
             ].map(([label, value]) => `<div class="stat-pill"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`).join("")}
           </div>
@@ -4879,6 +4905,12 @@
         const total = state.cards.length;
         const lands = state.cards.filter(card => detectedMainCategory(card) === "lands");
         const nonlands = state.cards.filter(card => detectedMainCategory(card) !== "lands");
+        const libraryCards = state.cards.filter(card => !card.isCommander);
+        const libraryLands = libraryCards.filter(card => detectedMainCategory(card) === "lands");
+        const openingHandSize = Math.min(7, libraryCards.length);
+        const avgOpeningLands = libraryCards.length
+          ? ((openingHandSize * libraryLands.length) / libraryCards.length).toFixed(2)
+          : "0.00";
         const avgMana = nonlands.length
           ? (nonlands.reduce((sum, card) => sum + effectiveManaValue(card), 0) / nonlands.length).toFixed(2)
           : "0.00";
@@ -4909,6 +4941,9 @@
           total,
           lands,
           nonlands,
+          libraryCards,
+          libraryLands,
+          avgOpeningLands,
           avgMana,
           manaRows,
           typeRows,
@@ -4926,6 +4961,7 @@
           ["Cards", data.total],
           ["Lands", data.lands.length],
           ["Nonlands", data.nonlands.length],
+          ["Avg Lands in Opening 7", data.avgOpeningLands],
           ["Avg MV", data.avgMana]
         ].map(([label, value]) => `<div class="stat-pill"><strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span></div>`).join("");
 
@@ -5426,10 +5462,18 @@
         if (targetCategory === "commanders") {
           if (card.isCommander) return false;
           card.isCommander = true;
+          card.isAlternateCommander = false;
           card.tableCategory = "";
           return true;
         }
-        if (card.isCommander) return false;
+        if (targetCategory === "alternate-commanders") {
+          if (card.isAlternateCommander) return false;
+          card.isCommander = false;
+          card.isAlternateCommander = true;
+          card.tableCategory = "";
+          return true;
+        }
+        if (card.isCommander || card.isAlternateCommander) return false;
         if (normalizeCategoryId(card.tableCategory) === targetCategory) return false;
         const automaticCategory = state.showSubtypes ? (activeSubtypeCategoryFor(card) || detectedMainCategory(card)) : detectedMainCategory(card);
         card.tableCategory = targetCategory === automaticCategory ? "" : targetCategory;
@@ -5437,11 +5481,13 @@
       }
 
       function assignDraggedCardsToVisibleRows(drag) {
-        if (!drag?.cards?.length) return;
+        if (!drag?.cards?.length) return false;
+        let changed = false;
         for (const item of drag.cards) {
           const position = item.card.manualPosition || readElementPosition(item.element);
-          assignTableCategory(item.card, tableCategoryAtPosition(position));
+          changed = assignTableCategory(item.card, tableCategoryAtPosition(position)) || changed;
         }
+        return changed;
       }
 
       function baseAnchorHasCards(anchor, excludedIds) {
@@ -5586,7 +5632,7 @@
 
       function applySnap(card, candidate) {
         const targetCategory = normalizeCategoryId(candidate.category);
-        assignTableCategory(card, targetCategory);
+        const categoryChanged = assignTableCategory(card, targetCategory);
         const stack = candidate.stack.slice();
         stack.splice(candidate.index, 0, card);
         const baseOrder = state.nextOrder;
@@ -5613,6 +5659,7 @@
         state.labelsHidden = true;
         hideSnapGuide();
         layoutCards();
+        if (categoryChanged) updateStatsAndBuckets();
         setStatus("Aligned", `${card.name} snapped into ${categoryLabel(targetCategory || currentTableCategory(card))}. Hold Shift while dropping to place freely.`);
       }
 
@@ -5620,7 +5667,10 @@
         const targetCategory = normalizeCategoryId(candidate.category);
         const movingIds = new Set(drag.cards.map(item => item.card.id));
         const movingCards = drag.cards.map(item => item.card);
-        movingCards.forEach(item => assignTableCategory(item, targetCategory));
+        let categoryChanged = false;
+        movingCards.forEach(item => {
+          categoryChanged = assignTableCategory(item, targetCategory) || categoryChanged;
+        });
         const stack = candidate.stack.filter(item => !movingIds.has(item.id));
         stack.splice(candidate.index, 0, ...movingCards);
         const cardsToPlace = stack.length ? stack : movingCards;
@@ -5641,6 +5691,7 @@
         state.labelsHidden = true;
         hideSnapGuide();
         layoutCards();
+        if (categoryChanged) updateStatsAndBuckets();
         setStatus("Aligned", `${movingCards.length} selected cards snapped into ${categoryLabel(targetCategory || currentTableCategory(movingCards[0]))}.`);
       }
 
@@ -5744,9 +5795,10 @@
             if (event.type !== "pointercancel") {
               if (drag.moved) {
                 if (!drag.group) commitCardPreview();
-                assignDraggedCardsToVisibleRows(drag);
+                const categoryChanged = assignDraggedCardsToVisibleRows(drag);
                 state.labelsHidden = true;
                 layoutCards();
+                if (categoryChanged) updateStatsAndBuckets();
                 setStatus(
                   "Placed",
                   drag.group
@@ -6762,6 +6814,21 @@
         commanderTagInput.addEventListener("change", () => {
           commanderTagInput.indeterminate = false;
           commanderTagInput.dataset.wasIndeterminate = "";
+          if (commanderTagInput.checked) {
+            alternateCommanderTagInput.checked = false;
+            alternateCommanderTagInput.indeterminate = false;
+            alternateCommanderTagInput.dataset.wasIndeterminate = "";
+          }
+          syncTableSectionEditorState();
+        });
+        alternateCommanderTagInput.addEventListener("change", () => {
+          alternateCommanderTagInput.indeterminate = false;
+          alternateCommanderTagInput.dataset.wasIndeterminate = "";
+          if (alternateCommanderTagInput.checked) {
+            commanderTagInput.checked = false;
+            commanderTagInput.indeterminate = false;
+            commanderTagInput.dataset.wasIndeterminate = "";
+          }
           syncTableSectionEditorState();
         });
         saveCardEditsButton.addEventListener("click", saveCardEdits);
@@ -6845,6 +6912,7 @@
           statsCategories: normalizeStatsCategoryList(card.statsCategories),
           tableCategory: normalizeCategoryId(card.tableCategory),
           isCommander: Boolean(card.isCommander),
+          isAlternateCommander: Boolean(card.isAlternateCommander),
           bucketEdited: Boolean(card.bucketEdited),
           category: categorize(card),
           order: Number.isFinite(card.order) ? card.order : index + 1,

@@ -467,6 +467,7 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
         "category": category_for(type_line),
         "tableCategory": "",
         "isCommander": False,
+        "isAlternateCommander": False,
         "utilityBuckets": list(buckets),
         "autoBuckets": list(buckets),
         "oracleTags": [],
