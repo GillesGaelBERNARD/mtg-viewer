@@ -114,5 +114,6 @@ Card data and images are loaded from the public Scryfall API. Magic: The Gatheri
 ## AI Agent Skill
 
 The repo also includes a separate Codex skill at `agent-skills/mtg-viewer-from-deck-images/`. It guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including accent-preserving localized titles, language-preserving Scryfall images, duplicate audits, offline image embedding, multi-face card images, strategy note fields, actual/alternate commander fields, land produced-mana grouping, and utility bucket compatibility.
+Warning: this skill consumes a large amount of tokens. You might rather use specialised scanning tools instead, such as the scan feature from MythicTools (mtg-viewer compatible).
 
 ![Loaded table overview](screenshots/from_cards_pic_to_digital_deck.png)
