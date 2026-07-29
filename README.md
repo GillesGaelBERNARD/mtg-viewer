@@ -117,3 +117,25 @@ The repo also includes a separate Codex skill at `agent-skills/mtg-viewer-from-d
 Warning: this skill consumes a large amount of tokens. You might rather use specialised scanning tools instead, such as the scan feature from MythicTools (mtg-viewer compatible).
 
 ![Loaded table overview](screenshots/from_cards_pic_to_digital_deck.png)
+
+## License
+
+This project is open source software licensed under the [MIT License](LICENSE).
+
+## Citation & Attribution
+
+If you use, adapt, or cite this project or its associated tools/skills in your work or software, please provide attribution and cite it as follows:
+
+```bibtex
+@misc{mtgviewer2026,
+  author = {Gilles Gaël BERNARD},
+  title = {MTG Deck Table Viewer},
+  year = {2026},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/GillesGaelBERNARD/mtg-viewer}}
+}
+```
+
+**Text reference:**
+> BERNARD, Gilles Gaël. *MTG Deck Table Viewer* (2026). Available at: https://github.com/GillesGaelBERNARD/mtg-viewer
