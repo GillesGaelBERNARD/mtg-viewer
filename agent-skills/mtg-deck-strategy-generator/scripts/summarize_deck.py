@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 mtg-deck-strategy-generator: Read-Only Deck Data Extractor
-Parses mtg-viewer V3 JSON save files and outputs structured deck statistics, v2 leaf bucket distributions,
-token mechanics (Clues, Waterbend, Treasures, Food), and multi-bucket anchor cards as a clean JSON summary.
+Parses mtg-viewer JSON save files and outputs structured deck statistics, leaf bucket distributions,
+and multi-bucket anchor cards as a clean JSON summary for LLM strategy synthesis.
 """
 
 import sys
@@ -35,7 +35,6 @@ def extract_deck_data(deck_data):
     alt_commanders = [c.get("name") for c in cards if c.get("isAlternateCommander")]
 
     if not commanders:
-        # Check legendary creatures or background/partner
         legendaries = [c.get("name") for c in cards if "Legendary" in (c.get("typeLine") or "") and "Creature" in (c.get("typeLine") or "")]
         if legendaries:
             commanders = [legendaries[0]]
@@ -118,7 +117,7 @@ def extract_deck_data(deck_data):
     }
 
 def main():
-    parser = argparse.ArgumentParser(description="Extract mtg-viewer V3 JSON deck data.")
+    parser = argparse.ArgumentParser(description="Extract mtg-viewer JSON deck data.")
     parser.add_argument("json_file", help="Path to .mtg-viewer.json file")
     args = parser.parse_args()
 

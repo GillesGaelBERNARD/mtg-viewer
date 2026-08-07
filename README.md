@@ -1,101 +1,28 @@
 # MTG Deck Table Viewer
 
-Version: v0.5
+A zero-install, single-file HTML/CSS/JS application for organizing Magic: The Gathering Commander decks on an interactive digital tabletop.
 
-A single-file Magic: The Gathering deck viewer for organizing decks and visualizing their stats, with automation and intuitive UI.
-
-Paste a decklist, get cards images automatically loaded and categorized, visualize the stats, then drag cards around and edit your deck.
-
-It runs fully locally/offline once cards info and images are fetched.
-
-Highly portable: single file browser app and single file deck save.
-
-Associated AI Agent skills to create mtg-viewer compatible deck lists from images of physical cards and to export viewer saves to Moxfield decklists.
-
-![Loaded table overview](screenshots/overview.png)
+![Main interface](screenshots/main_table_view.png)
 
 ## Features
 
-4 tabs: Tabletop deck view, Stats, Utility buckets, and Strategy notes.
-
-### Automated and interactive tabletop deck view
-- Imports card images from Scryfall by card name or Scryfall ID.
-- Imports `.csv` files exported by the MythicTools app after scanning a deck.
-- Groups cards into creature, planeswalker, enchantment, artifact, instant, sorcery, others, and land areas by default.
-- Can activate selected Scryfall-detected subtypes as extra tabletop rows, then show/hide those rows globally.
-- Supports actual commander tags and alternate commander tags for cards that could be commanders but stay in the library; each gets its own tabletop section.
-- Aligns non-land cards by mana value.
-- Supports manually overriding the mana value (i.e., for X, XX cards you plan to ideally cast at a given MV).
-- Keeps lands on the right side of the table and auto-sorts them into produced-mana stacks: Any Color, Colorless, single colors, and multicolor combinations.
-- Supports free dragging, stack snapping, and between-card insertion while preserving visible stack spacing.
-- Shows a face switch on double-faced cards so you can view the other side.
-- Lets held cards temporarily rise to the top for inspection, then return to their stack layer on release.
-- Adds/removes cards, with quantity support when adding cards.
-- Includes Undo, Redo, and Reset Positions controls. Undo stores the last five changes.
-- Saves and imports `.mtg-viewer.json` bundles containing the decklist, strategy notes, card placement, buckets, and Scryfall image URLs, with optional embedded images for offline use.
-- Provides pan, zoom, fit, and center controls for large deck layouts.
-
-![Move history controls](screenshots/zoom.png)
-
-### Deck stats
-- Stats view for deck summary, exact average lands in the opening 7, mana curve, type counts, color demand/sources, utility bucket counts, and stats-only custom categories.
-- Custom stats categories are edited from the Table tab and let you count tags such as Equipment without changing tabletop placement or utility buckets.
-- Keyboard navigation in Stats tab (`ArrowUp`, `ArrowDown`, `PageUp`, `PageDown`, `Home`) to smoothly scroll through statistical breakdowns.
-
-![Loaded table overview](screenshots/stats_view.png)
-
-### Utility buckets
-- Automated utility Buckets such as Ramp, Card Draw, Removal, Board Wipe, Protection, Tutor, Graveyard, +1/+1 Counter, LifeGain, Tokens, etc. detected from Scryfall Oracle Tags and card heuristics (including Clue tokens and Deathtouch synergy classification).
-- Land cards are excluded from the Ramp bucket and Ramp stats.
-- Granular Bucket Subcategories & Declared Sub-buckets: Customize fine-grained subcategories per utility bucket (e.g., Card Draw -> Impulse Draw, Repeatable Draw, Cantrip; Removal -> Single Target Spot Removal, Board Wipe, Token Wipe, etc.) with configurable default/custom rules and toggleable subcategory display.
-- Custom utility Buckets, with manual per-card or multi-card bucket editing.
-- View that shows card references grouped by utility bucket, supports the same inspection/zoom behavior as the table, and lets you drag cards between buckets to edit assignments.
-
-![Loaded table overview](screenshots/buckets_view.png)
-
-![Loaded table overview](screenshots/edit_buckets_view.png)
-
-### Strategy notes
-- Strategy tab for freeform piloting notes, game plan reminders, mulligan notes, key synergies, and sequencing notes.
-- Strategy notes are saved inside `.mtg-viewer.json` files and restored on import.
+- **Interactive Tabletop**: Drag and arrange cards across custom categories, land mana stacks, and utility buckets.
+- **Scryfall Integration**: Automatically resolves card text, type lines, mana costs, color identity, and card faces via Scryfall API.
+- **Offline Mode**: Supports embedding card images directly into `.mtg-viewer.json` save files.
+- **Granular Auto-Buckets**: Deterministically classifies card abilities into leaf categories (e.g. `damage/deal/creature`, `tokens/create/spirit`, `lands/react-to/enter-land`).
+- **Strategy & Notes**: Attach piloting notes and generate deck strategy guides in Markdown.
+- **Moxfield Export**: Export decks directly to Moxfield format.
 
 ## Usage
 
-Open `mtg-viewer.html` in a browser.
+Simply open `mtg-viewer.html` in any web browser.
 
-Paste a decklist in this format:
+### Loading & Saving Decks
 
-```text
-1 Birds of Paradise
-1 Sirène dompte-tempête
-1 Sol Ring
-3 Mountain
-1 Command Tower
-```
+- Click **Open Deck File** to load an `.mtg-viewer.json` save file.
+- Click **Save Deck File** to download or save your deck state.
 
-The viewer accepts normal quantity prefixes such as `3 Mountain` or `3x Mountain`, and localized printed names with accents such as `Flibustière à voile volante` or `Persécuteur morne-œil`. Each copy becomes its own movable card on the table with a separate internal id. Scryfall fetches are paced so large lists load steadily instead of hammering the API.
-
-You can also import a MythicTools scan export with **Import from MythicTools CSV**.
-
-Use **Export mtg-viewer JSON** and **Import mtg-viewer JSON** for portable viewer-compatible saves.
-
-## Controls
-
-### Tabletop deck view
-- Drag a card to move it.
-- Use Add Card to append one or more cards to the current table by card name or Scryfall ID.
-- Right-click a card to override its mana value, assign commander/alternate commander/table type/custom stats tags, or remove it after confirmation.
-- Use Subtype Sections to activate detected subtypes by main type, then Show Subtypes to reveal only those activated subtype rows. Cards from that type that do not match an activated subtype appear in that type's Others row.
-- Drop near another card to snap into that stack.
-- Hold Shift while dropping to place freely without snapping.
-- Hold a card to bring it forward temporarily; release to return it to its stack layer.
-- Use the small face number on double-faced cards, or double-click the card, to flip sides.
-- Hold right-click and draw rectangle to select and move multiple cards.
-- Use Undo, Redo, and Reset Positions to manage manual layout and add/remove changes.
-- Use Export mtg-viewer JSON to write a portable table save to your device. Choose whether to embed images for offline imports.
-- Use Import mtg-viewer JSON to reload a saved decklist, strategy notes, card placement, and either embedded images or Scryfall image URLs.
-
-### Strategy view
+### Strategy Notes
 
 - Type freeform notes about how the deck plays.
 - Notes are included in mtg-viewer JSON exports.
@@ -117,7 +44,7 @@ Card data and images are loaded from the public Scryfall API. Magic: The Gatheri
 
 ## AI Agent Skills
 
-The repo includes specialized Codex agent skills under `agent-skills/`:
+The repo includes specialized AI agent skills under `agent-skills/`:
 
 1. **mtg-viewer-from-deck-images** (`agent-skills/mtg-viewer-from-deck-images/`):
    - Guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including accent-preserving localized titles, language-preserving Scryfall images, duplicate audits, offline image embedding, multi-face card images, strategy note fields, actual/alternate commander fields, land produced-mana grouping, and utility bucket compatibility.
@@ -127,7 +54,7 @@ The repo includes specialized Codex agent skills under `agent-skills/`:
    - Converts `.mtg-viewer.json` saved decks into paste-ready Moxfield decklists while preserving commander designations (`isCommander`) and card quantities.
 
 3. **mtg-deck-strategy-generator** (`agent-skills/mtg-deck-strategy-generator/`):
-   - Analyzes `.mtg-viewer.json` deck save files in a strictly read-only manner, leveraging V3 canonical save data, V2 `autoBucketFacts`, and multi-bucket anchor cards to generate concise, high-insight Markdown deck strategy and piloting manuals (`strategy_<deck_title>.md`) with zero legacy vague buckets (`"synergy"`, `"payoff"`, `"finisher"`).
+   - Analyzes `.mtg-viewer.json` deck save files in a strictly read-only manner, leveraging `autoBucketFacts`, granular mechanics, and multi-bucket anchor cards to generate concise, high-insight Markdown deck strategy and piloting manuals (`strategy_<deck_title>.md`).
 
 ![Loaded table overview](screenshots/from_cards_pic_to_digital_deck.png)
 
