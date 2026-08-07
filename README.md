@@ -10,7 +10,7 @@ It runs fully locally/offline once cards info and images are fetched.
 
 Highly portable: single file browser app and single file deck save.
 
-Associated AI Agent skill to create mtg-viewer compatible deck lists from images of physical cards.
+Associated AI Agent skills to create mtg-viewer compatible deck lists from images of physical cards and to export viewer saves to Moxfield decklists.
 
 ![Loaded table overview](screenshots/overview.png)
 
@@ -40,12 +40,14 @@ Associated AI Agent skill to create mtg-viewer compatible deck lists from images
 ### Deck stats
 - Stats view for deck summary, exact average lands in the opening 7, mana curve, type counts, color demand/sources, utility bucket counts, and stats-only custom categories.
 - Custom stats categories are edited from the Table tab and let you count tags such as Equipment without changing tabletop placement or utility buckets.
+- Keyboard navigation in Stats tab (`ArrowUp`, `ArrowDown`, `PageUp`, `PageDown`, `Home`) to smoothly scroll through statistical breakdowns.
 
 ![Loaded table overview](screenshots/stats_view.png)
 
 ### Utility buckets
-- Automated utility Buckets such as Ramp, Card Draw, Removal, Board Wipe, Protection, Tutor, Graveyard, +1/+1 Counter, LifeGain, etc. detected from Scryfall Oracle Tags.
+- Automated utility Buckets such as Ramp, Card Draw, Removal, Board Wipe, Protection, Tutor, Graveyard, +1/+1 Counter, LifeGain, Tokens, etc. detected from Scryfall Oracle Tags and card heuristics (including Clue tokens and Deathtouch synergy classification).
 - Land cards are excluded from the Ramp bucket and Ramp stats.
+- Granular Bucket Subcategories & Declared Sub-buckets: Customize fine-grained subcategories per utility bucket (e.g., Card Draw -> Impulse Draw, Repeatable Draw, Cantrip; Removal -> Single Target Spot Removal, Board Wipe, Token Wipe, etc.) with configurable default/custom rules and toggleable subcategory display.
 - Custom utility Buckets, with manual per-card or multi-card bucket editing.
 - View that shows card references grouped by utility bucket, supports the same inspection/zoom behavior as the table, and lets you drag cards between buckets to edit assignments.
 
@@ -100,8 +102,10 @@ Use **Export mtg-viewer JSON** and **Import mtg-viewer JSON** for portable viewe
 
 ### Utility buckets view
 
-- To edit buckets: right click on card or move card around categories
-- Click on a card or category in the menu to focus the view
+- To edit buckets: right click on card or move card around categories.
+- Click **Subcategories** to toggle fine-grained sub-bucket views for detailed role breakdowns.
+- Click **Subcategory Rules** to edit, declare, clear, or restore default sub-bucket rules per utility category.
+- Click on a card or category in the menu to focus the view.
 
 ## Notes
 
@@ -111,10 +115,16 @@ Save files are plain JSON with the `.mtg-viewer.json` extension. Browsers that s
 
 Card data and images are loaded from the public Scryfall API. Magic: The Gathering card names, text, and images belong to their respective rights holders.
 
-## AI Agent Skill
+## AI Agent Skills
 
-The repo also includes a separate Codex skill at `agent-skills/mtg-viewer-from-deck-images/`. It guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including accent-preserving localized titles, language-preserving Scryfall images, duplicate audits, offline image embedding, multi-face card images, strategy note fields, actual/alternate commander fields, land produced-mana grouping, and utility bucket compatibility.
-Warning: this skill consumes a large amount of tokens. You might rather use specialised scanning tools instead, such as the scan feature from MythicTools (mtg-viewer compatible).
+The repo includes specialized Codex agent skills under `agent-skills/`:
+
+1. **mtg-viewer-from-deck-images** (`agent-skills/mtg-viewer-from-deck-images/`):
+   - Guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including accent-preserving localized titles, language-preserving Scryfall images, duplicate audits, offline image embedding, multi-face card images, strategy note fields, actual/alternate commander fields, land produced-mana grouping, and utility bucket compatibility.
+   - *Warning: this skill consumes a large amount of tokens. You might rather use specialised scanning tools instead, such as the scan feature from MythicTools (mtg-viewer compatible).*
+
+2. **mtg-viewer-to-moxfield** (`agent-skills/mtg-viewer-to-moxfield/`):
+   - Converts `.mtg-viewer.json` saved decks into paste-ready Moxfield decklists while preserving commander designations (`isCommander`) and card quantities.
 
 ![Loaded table overview](screenshots/from_cards_pic_to_digital_deck.png)
 

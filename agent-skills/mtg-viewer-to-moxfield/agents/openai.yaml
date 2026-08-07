@@ -1,0 +1,4 @@
+interface:
+  display_name: "MTG Viewer To Moxfield"
+  short_description: "Convert viewer saves to Moxfield decklists"
+  default_prompt: "Use $mtg-viewer-to-moxfield to convert MTG Viewer JSON saves into paste-ready Moxfield decklists."
