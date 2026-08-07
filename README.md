@@ -126,6 +126,9 @@ The repo includes specialized Codex agent skills under `agent-skills/`:
 2. **mtg-viewer-to-moxfield** (`agent-skills/mtg-viewer-to-moxfield/`):
    - Converts `.mtg-viewer.json` saved decks into paste-ready Moxfield decklists while preserving commander designations (`isCommander`) and card quantities.
 
+3. **mtg-deck-strategy-generator** (`agent-skills/mtg-deck-strategy-generator/`):
+   - Analyzes `.mtg-viewer.json` deck save files in a strictly read-only manner, leveraging V3 canonical save data, V2 `autoBucketFacts`, and multi-bucket anchor cards to generate concise, high-insight Markdown deck strategy and piloting manuals (`strategy_<deck_title>.md`) with zero legacy vague buckets (`"synergy"`, `"payoff"`, `"finisher"`).
+
 ![Loaded table overview](screenshots/from_cards_pic_to_digital_deck.png)
 
 ## License
