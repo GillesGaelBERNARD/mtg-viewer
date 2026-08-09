@@ -2,7 +2,7 @@
 """
 mtg-deck-strategy-generator: Read-Only Deck Data Extractor
 Parses mtg-viewer JSON save files and outputs structured deck statistics, leaf bucket distributions,
-and multi-bucket anchor cards as a clean JSON summary for LLM strategy synthesis.
+strategy notes, and multi-bucket anchor cards as a clean JSON summary for LLM strategy synthesis.
 """
 
 import sys
@@ -29,6 +29,7 @@ def clean_bucket_list(bucket_ids):
 
 def extract_deck_data(deck_data):
     deck_title = deck_data.get("deckTitle") or "MTG Commander Deck"
+    strategy_notes = (deck_data.get("strategyNotes") or "").strip()
     cards = deck_data.get("cards", [])
 
     commanders = [c.get("name") for c in cards if c.get("isCommander")]
@@ -105,6 +106,7 @@ def extract_deck_data(deck_data):
         "deckTitle": deck_title,
         "commander": commanders[0] if commanders else "Unknown Commander",
         "altCommanders": alt_commanders,
+        "strategyNotes": strategy_notes,
         "totalCards": len(cards),
         "landCount": len(lands),
         "nonLandCount": len(non_lands),
