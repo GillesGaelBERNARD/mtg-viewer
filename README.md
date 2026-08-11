@@ -53,8 +53,8 @@ The repo includes specialized AI agent skills under `agent-skills/`:
 2. **mtg-viewer-to-moxfield** (`agent-skills/mtg-viewer-to-moxfield/`):
    - Converts `.mtg-viewer.json` saved decks into paste-ready Moxfield decklists while preserving commander designations (`isCommander`) and card quantities.
 
-3. **mtg-deck-strategy-generator** (`agent-skills/mtg-deck-strategy-generator/`):
-   - Analyzes `.mtg-viewer.json` deck save files in a strictly read-only manner, leveraging `autoBucketFacts`, granular mechanics, and multi-bucket anchor cards to generate concise, high-insight Markdown deck strategy and piloting manuals (`strategy_<deck_title>.md`).
+3. **mtg-deck-strategy-notes** (`agent-skills/mtg-deck-strategy-notes/`):
+   - Generates grounded Markdown strategy notes from compact current-format deck statistics and bounded card queries, using a fresh isolated Codex context for every deck without exposing the full save JSON to the LLM.
 
 ![Loaded table overview](screenshots/from_cards_pic_to_digital_deck.png)
 
