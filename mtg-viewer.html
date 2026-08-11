@@ -1904,8 +1904,8 @@
       <h2 id="add-card-modal-title">Add Cards</h2>
       <div class="modal-fields">
         <label for="add-card-name">
-          Card name or Scryfall ID
-          <input id="add-card-name" type="text" autocomplete="off" placeholder="Sol Ring or a Scryfall UUID">
+          Card name, exact printing, or Scryfall ID
+          <input id="add-card-name" type="text" autocomplete="off" placeholder="Sol Ring (CMM) 410 or a Scryfall UUID">
         </label>
         <label for="add-card-quantity">
           Quantity
@@ -3883,7 +3883,7 @@
       const STACK_CLUSTER_GAP_MM = 34;
       const MIN_FETCH_INTERVAL_MS = 1000;
       const HISTORY_LIMIT = 5;
-      const SAVE_VERSION = 3;
+      const SAVE_VERSION = 4;
       const CATEGORY_ORDER = [
         { id: "commanders", label: "Commanders", test: card => Boolean(card.isCommander), special: true },
         { id: "alternate-commanders", label: "Alternate Commanders", test: card => Boolean(card.isAlternateCommander), special: true },
@@ -4190,15 +4190,23 @@
         return repairMojibakeText(value).normalize("NFC").trim();
       }
 
+      function normalizePrintFinish(value) {
+        const clean = String(value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+        if (["f", "foil"].includes(clean)) return "foil";
+        if (["e", "etched", "etchedfoil"].includes(clean)) return "etched";
+        if (["n", "nonfoil", "regular"].includes(clean)) return "nonfoil";
+        return "";
+      }
+
+      function parseBooleanMetadata(value) {
+        return /^(?:1|true|yes|y)$/i.test(String(value || "").trim());
+      }
+
       function parseDecklistLine(line) {
         let clean = String(line || "")
-          .replace(/\s*\/\/.*$/, "")
-          .replace(/\s*#.*$/, "")
           .replace(/^\s*SB:\s*/i, "")
-          .replace(/\s+\([^)]*\)\s*\d+\s*$/, "")
-          .replace(/\s+\[[^\]]+\]\s*$/, "")
           .trim();
-        if (!clean) return null;
+        if (!clean || /^(?:commander|deck|mainboard|sideboard|maybeboard):?$/i.test(clean)) return null;
 
         let count = 1;
         const quantity = clean.match(/^(\d+)\s*[xX]?\s+(.+)$/);
@@ -4206,9 +4214,54 @@
           count = Math.max(1, Math.floor(Number(quantity[1])));
           clean = String(quantity[2] || "").trim();
         }
+
+        const parts = clean.split(/\s+\|\s+/);
+        clean = String(parts.shift() || "").trim();
+        const metadata = {};
+        for (const part of parts) {
+          const match = part.match(/^([a-z][a-z0-9_-]*)\s*=\s*(.*?)\s*$/i);
+          if (match) metadata[match[1].toLowerCase().replace(/[_-]/g, "")] = match[2];
+        }
+
+        let finish = normalizePrintFinish(metadata.finish);
+        const finishMarker = clean.match(/\s+\*([fe])\*\s*$/i);
+        if (finishMarker) {
+          finish = finishMarker[1].toLowerCase() === "e" ? "etched" : "foil";
+          clean = clean.slice(0, finishMarker.index).trim();
+        }
+
+        let setCode = String(metadata.set || metadata.setcode || "").trim().toLowerCase();
+        let collectorNumber = String(metadata.collector || metadata.collectornumber || metadata.cn || "").trim();
+        const exactPrinting = clean.match(/\s+\(([a-z0-9]{2,8})\)\s+#?([^\s]+)\s*$/i);
+        if (exactPrinting) {
+          setCode = exactPrinting[1].toLowerCase();
+          collectorNumber = exactPrinting[2];
+          clean = clean.slice(0, exactPrinting.index).trim();
+        } else {
+          const bracketPrinting = clean.match(/\s+\[([a-z0-9]{2,8})\](?:\s+#?([^\s]+))?\s*$/i);
+          if (bracketPrinting) {
+            setCode = bracketPrinting[1].toLowerCase();
+            collectorNumber = bracketPrinting[2] || collectorNumber;
+            clean = clean.slice(0, bracketPrinting.index).trim();
+          }
+        }
+
         clean = normalizeCardNameInput(clean);
-        if (!clean) return null;
-        return { count, name: clean };
+        const scryfallId = normalizeScryfallIdInput(metadata.id || metadata.scryfallid || clean);
+        if (!clean && !scryfallId) return null;
+        return {
+          count,
+          name: clean || scryfallId,
+          scryfallId,
+          setCode,
+          collectorNumber,
+          language: String(metadata.lang || metadata.language || "").trim().toLowerCase(),
+          finish,
+          condition: String(metadata.condition || "").trim(),
+          altered: parseBooleanMetadata(metadata.altered),
+          signed: parseBooleanMetadata(metadata.signed),
+          misprint: parseBooleanMetadata(metadata.misprint)
+        };
       }
 
       function cleanDeckLine(line) {
@@ -4226,25 +4279,110 @@
         return parseDecklistEntries(text).flatMap(entry => Array.from({ length: entry.count }, () => entry.name));
       }
 
+      function cardDeckSpecifier(card, options = {}) {
+        const name = String(card.requestedName || card.name || "").trim();
+        const setCode = String(card.setCode || "").trim().toUpperCase();
+        const collectorNumber = String(card.collectorNumber || "").trim();
+        const finish = normalizePrintFinish(card.finish);
+        let result = name;
+        if (setCode && collectorNumber) result += ` (${setCode}) ${collectorNumber}`;
+        else if (setCode) result += ` [${setCode}]`;
+        if (finish === "foil") result += " *F*";
+        if (finish === "etched") result += " *E*";
+        if (!options.extended) return result;
+
+        const metadata = [];
+        if (card.scryfallId) metadata.push(`id=${card.scryfallId}`);
+        if (card.language) metadata.push(`lang=${card.language}`);
+        if (finish === "nonfoil") metadata.push("finish=nonfoil");
+        if (card.condition) metadata.push(`condition=${card.condition}`);
+        if (card.altered) metadata.push("altered=true");
+        if (card.signed) metadata.push("signed=true");
+        if (card.misprint) metadata.push("misprint=true");
+        return metadata.length ? `${result} | ${metadata.join(" | ")}` : result;
+      }
+
       function cardDeckLine(card) {
-        return `1 ${card.requestedName || card.name}`;
+        return `1 ${cardDeckSpecifier(card)}`;
+      }
+
+      function deckEntryFromCard(card, count = 1) {
+        return {
+          count,
+          name: String(card.requestedName || card.name || "").trim(),
+          scryfallId: String(card.scryfallId || "").trim().toLowerCase(),
+          setCode: String(card.setCode || "").trim().toLowerCase(),
+          collectorNumber: String(card.collectorNumber || "").trim(),
+          language: String(card.language || "").trim().toLowerCase(),
+          finish: normalizePrintFinish(card.finish),
+          condition: String(card.condition || "").trim(),
+          altered: Boolean(card.altered),
+          signed: Boolean(card.signed),
+          misprint: Boolean(card.misprint)
+        };
+      }
+
+      function preserveExistingPrintingMetadata(entries, cards) {
+        if (!entries.length || !cards.length) return entries;
+        const pools = new Map();
+        for (const card of cards) {
+          const key = cardDeckSpecifier(card);
+          if (!pools.has(key)) pools.set(key, []);
+          pools.get(key).push(card);
+        }
+
+        return entries.flatMap(entry => {
+          if (
+            entry.scryfallId ||
+            entry.language ||
+            entry.condition ||
+            entry.altered ||
+            entry.signed ||
+            entry.misprint ||
+            !entry.setCode ||
+            !entry.collectorNumber
+          ) {
+            return [entry];
+          }
+          const key = cardDeckSpecifier(entry);
+          const pool = pools.get(key) || [];
+          const selected = pool.splice(0, entry.count);
+          if (!selected.length) return [entry];
+
+          const groups = [];
+          const byIdentity = new Map();
+          for (const card of selected) {
+            const metadata = deckEntryFromCard(card);
+            const identity = cardDeckSpecifier(card, { extended: true });
+            let group = byIdentity.get(identity);
+            if (!group) {
+              group = { ...metadata, count: 0 };
+              byIdentity.set(identity, group);
+              groups.push(group);
+            }
+            group.count += 1;
+          }
+          const remaining = entry.count - selected.length;
+          if (remaining > 0) groups.push({ ...entry, count: remaining });
+          return groups;
+        });
       }
 
       function decklistLinesFromCards(cards) {
         const groups = [];
-        const byName = new Map();
+        const byPrinting = new Map();
         for (const card of cards) {
-          const name = String(card.requestedName || card.name || "").trim();
-          if (!name) continue;
-          let group = byName.get(name);
+          const specifier = cardDeckSpecifier(card);
+          if (!specifier) continue;
+          let group = byPrinting.get(specifier);
           if (!group) {
-            group = { name, count: 0 };
-            byName.set(name, group);
+            group = { specifier, count: 0 };
+            byPrinting.set(specifier, group);
             groups.push(group);
           }
           group.count += 1;
         }
-        return groups.map(group => `${group.count} ${group.name}`);
+        return groups.map(group => `${group.count} ${group.specifier}`);
       }
 
       function syncDecklistFromCards() {
@@ -5093,6 +5231,22 @@
         }
       }
 
+      function applyPrintingMetadata(card, metadata = {}) {
+        const raw = card.raw || {};
+        card.setCode = String(raw.set || metadata.setCode || card.setCode || "").trim().toLowerCase();
+        card.setName = String(raw.set_name || metadata.setName || card.setName || "").trim();
+        card.collectorNumber = String(raw.collector_number || metadata.collectorNumber || card.collectorNumber || "").trim();
+        card.language = String(raw.lang || metadata.language || card.language || "").trim().toLowerCase();
+        const requestedFinish = normalizePrintFinish(metadata.finish || card.finish);
+        const availableFinishes = Array.isArray(raw.finishes) ? raw.finishes.map(normalizePrintFinish).filter(Boolean) : [];
+        card.finish = requestedFinish || (availableFinishes.length === 1 ? availableFinishes[0] : "");
+        card.condition = String(metadata.condition ?? card.condition ?? "").trim();
+        card.altered = Boolean(metadata.altered ?? card.altered);
+        card.signed = Boolean(metadata.signed ?? card.signed);
+        card.misprint = Boolean(metadata.misprint ?? card.misprint);
+        return card;
+      }
+
       function normalizeScryfallCard(raw, requestedName) {
         const resolvedRequestedName = hasUnknownNameChars(requestedName) && raw.printed_name
           ? normalizeCardNameInput(raw.printed_name)
@@ -5105,6 +5259,15 @@
           id: crypto.randomUUID(),
           scryfallId: raw.id || "",
           oracleId: raw.oracle_id || "",
+          setCode: raw.set || "",
+          setName: raw.set_name || "",
+          collectorNumber: raw.collector_number || "",
+          language: raw.lang || "",
+          finish: "",
+          condition: "",
+          altered: false,
+          signed: false,
+          misprint: false,
           requestedName: resolvedRequestedName,
           name: raw.name || resolvedRequestedName,
           imageUri: active?.imageUri || imageUri,
@@ -5136,6 +5299,7 @@
           bucketOrder: 0,
           raw
         };
+        applyPrintingMetadata(card);
         refreshHeuristicBuckets(card);
         return card;
       }
@@ -5234,10 +5398,12 @@
         return bestSearchResult(payload.data);
       }
 
-      async function fetchCardByName(name, signal) {
+      async function fetchCardByName(name, signal, options = {}) {
         const cleanName = normalizeCardNameInput(name);
+        const setCode = String(options.setCode || "").trim().toLowerCase();
+        const setQuery = setCode ? `&set=${encodeURIComponent(setCode)}` : "";
         await rateLimitFetchStart();
-        const exactUrl = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cleanName)}`;
+        const exactUrl = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cleanName)}${setQuery}`;
         let response = await fetch(exactUrl, {
           signal,
           headers: { "Accept": "application/json" }
@@ -5246,7 +5412,7 @@
 
         if (!response.ok || card.object === "error") {
           await rateLimitFetchStart();
-          const fuzzyUrl = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cleanName)}`;
+          const fuzzyUrl = `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cleanName)}${setQuery}`;
           response = await fetch(fuzzyUrl, {
             signal,
             headers: { "Accept": "application/json" }
@@ -5260,6 +5426,47 @@
         }
 
         return normalizeScryfallCard(card, cleanName);
+      }
+
+      function scryfallCardMatchesRequestedName(raw, requestedName) {
+        const requested = normalizeCardNameInput(requestedName).toLocaleLowerCase();
+        if (!requested || normalizeScryfallIdInput(requested)) return true;
+        const candidates = [
+          raw.name,
+          raw.printed_name,
+          ...(raw.card_faces || []).flatMap(face => [face.name, face.printed_name])
+        ]
+          .map(value => normalizeCardNameInput(value).toLocaleLowerCase())
+          .filter(Boolean);
+        return candidates.some(candidate => (
+          candidate === requested ||
+          candidate.startsWith(`${requested} // `) ||
+          requested.startsWith(`${candidate} // `)
+        ));
+      }
+
+      async function fetchCardBySetAndCollectorNumber(setCode, collectorNumber, language, requestedName, signal) {
+        const cleanSetCode = String(setCode || "").trim().toLowerCase();
+        const cleanCollectorNumber = String(collectorNumber || "").trim();
+        const cleanLanguage = String(language || "").trim().toLowerCase();
+        if (!cleanSetCode || !cleanCollectorNumber) throw new Error("Set code and collector number are required.");
+        await rateLimitFetchStart();
+        const languagePath = cleanLanguage ? `/${encodeURIComponent(cleanLanguage)}` : "";
+        const url = `https://api.scryfall.com/cards/${encodeURIComponent(cleanSetCode)}/${encodeURIComponent(cleanCollectorNumber)}${languagePath}`;
+        const response = await fetch(url, {
+          signal,
+          headers: { "Accept": "application/json" }
+        });
+        const raw = await response.json();
+        if (!response.ok || raw.object === "error") {
+          throw new Error(raw.details || `Printing not found: ${cleanSetCode.toUpperCase()} ${cleanCollectorNumber}${cleanLanguage ? ` (${cleanLanguage})` : ""}`);
+        }
+        if (!scryfallCardMatchesRequestedName(raw, requestedName)) {
+          throw new Error(
+            `${cleanSetCode.toUpperCase()} ${cleanCollectorNumber} is ${raw.name || "a different card"}, not ${requestedName}.`
+          );
+        }
+        return normalizeScryfallCard(raw, requestedName || raw.name || cleanCollectorNumber);
       }
 
       async function fetchCardByScryfallId(id, signal) {
@@ -5281,6 +5488,27 @@
         const scryfallId = normalizeScryfallIdInput(value);
         if (scryfallId) return fetchCardByScryfallId(scryfallId, signal);
         return fetchCardByName(value, signal);
+      }
+
+      async function fetchCardByDeckEntry(entry, signal) {
+        if (!entry) throw new Error("Card entry is required.");
+        let card;
+        if (entry.scryfallId) {
+          card = await fetchCardByScryfallId(entry.scryfallId, signal);
+        } else if (entry.setCode && entry.collectorNumber) {
+          card = await fetchCardBySetAndCollectorNumber(
+            entry.setCode,
+            entry.collectorNumber,
+            entry.language,
+            entry.name,
+            signal
+          );
+        } else if (entry.setCode) {
+          card = await fetchCardByName(entry.name, signal, { setCode: entry.setCode });
+        } else {
+          card = await fetchCardByNameOrId(entry.name, signal);
+        }
+        return applyPrintingMetadata(card, entry);
       }
 
       async function fetchCardCollection(identifiers, signal) {
@@ -5474,6 +5702,9 @@
             String(card.name || "").includes(" // ") ||
             !card.oracleId ||
             !card.oracleText ||
+            !card.setCode ||
+            !card.collectorNumber ||
+            !card.language ||
             !card.imageUri
           )
         );
@@ -5485,13 +5716,13 @@
         } catch (error) {
           return;
         }
-        const sourceById = new Map(sourceCards.map(card => [card.id, card]));
+        const sourceById = new Map(sourceCards.map(card => [String(card.id || "").toLowerCase(), card]));
         let updated = 0;
         for (const [index, card] of candidates.entries()) {
           if (!state.cards.includes(card)) continue;
           try {
             setStatus("Checking images", `${index + 1}/${candidates.length}: ${card.name}`, candidates.length ? index / candidates.length : 0);
-            const raw = sourceById.get(card.scryfallId);
+            const raw = sourceById.get(String(card.scryfallId || "").toLowerCase());
             if (!raw) continue;
             if (!state.cards.includes(card)) continue;
             let imageSource = raw;
@@ -5504,6 +5735,11 @@
 
             card.scryfallId = normalized.scryfallId || card.scryfallId;
             card.oracleId = normalized.oracleId || card.oracleId;
+            card.setCode = normalized.setCode || card.setCode;
+            card.setName = normalized.setName || card.setName;
+            card.collectorNumber = normalized.collectorNumber || card.collectorNumber;
+            card.language = normalized.language || card.language;
+            card.finish = normalizePrintFinish(card.finish || normalized.finish);
             card.name = normalized.name || card.name;
             card.manaCost = normalized.manaCost || card.manaCost || "";
             card.oracleText = normalized.oracleText || card.oracleText || "";
@@ -5838,7 +6074,15 @@
         const nameIndex = mythicToolsColumnIndex(headers, "Card Name");
         const quantityIndex = mythicToolsColumnIndex(headers, "Quantity");
         const scryfallIdIndex = mythicToolsColumnIndex(headers, "Scryfall ID");
+        const setCodeIndex = mythicToolsColumnIndex(headers, "Set Code");
+        const setNameIndex = mythicToolsColumnIndex(headers, "Set Name");
+        const collectorNumberIndex = mythicToolsColumnIndex(headers, "Collector Number");
         const languageIndex = mythicToolsColumnIndex(headers, "Language");
+        const finishIndex = mythicToolsColumnIndex(headers, "Finish");
+        const conditionIndex = mythicToolsColumnIndex(headers, "Condition");
+        const alteredIndex = mythicToolsColumnIndex(headers, "Altered");
+        const signedIndex = mythicToolsColumnIndex(headers, "Signed");
+        const misprintIndex = mythicToolsColumnIndex(headers, "Misprint");
 
         if (nameIndex < 0 || quantityIndex < 0) {
           throw new Error("This does not look like a MythicTools deck scan CSV. Expected Card Name and Quantity columns.");
@@ -5858,7 +6102,15 @@
             name,
             count: Math.max(1, Math.floor(quantity)),
             scryfallId: scryfallIdIndex >= 0 ? String(row[scryfallIdIndex] || "").trim().toLowerCase() : "",
-            language: languageIndex >= 0 ? String(row[languageIndex] || "").trim() : ""
+            setCode: setCodeIndex >= 0 ? String(row[setCodeIndex] || "").trim().toLowerCase() : "",
+            setName: setNameIndex >= 0 ? String(row[setNameIndex] || "").trim() : "",
+            collectorNumber: collectorNumberIndex >= 0 ? String(row[collectorNumberIndex] || "").trim() : "",
+            language: languageIndex >= 0 ? String(row[languageIndex] || "").trim().toLowerCase() : "",
+            finish: finishIndex >= 0 ? normalizePrintFinish(row[finishIndex]) : "",
+            condition: conditionIndex >= 0 ? String(row[conditionIndex] || "").trim() : "",
+            altered: alteredIndex >= 0 && parseBooleanMetadata(row[alteredIndex]),
+            signed: signedIndex >= 0 && parseBooleanMetadata(row[signedIndex]),
+            misprint: misprintIndex >= 0 && parseBooleanMetadata(row[misprintIndex])
           });
         }
         if (!entries.length) throw new Error("No cards were found in this MythicTools CSV.");
@@ -5910,8 +6162,17 @@
         const faces = normalizeSavedFaces(saved, name, imageUri, imageData, sourceImageUri);
         const card = {
           id: uniqueCardId(saved.id, usedIds),
-          scryfallId: String(saved.scryfallId || ""),
+          scryfallId: String(saved.scryfallId || "").trim().toLowerCase(),
           oracleId: String(saved.oracleId || saved.oracle_id || ""),
+          setCode: String(saved.setCode || saved.set || "").trim().toLowerCase(),
+          setName: String(saved.setName || saved.set_name || "").trim(),
+          collectorNumber: String(saved.collectorNumber || saved.collector_number || "").trim(),
+          language: String(saved.language || saved.lang || "").trim().toLowerCase(),
+          finish: normalizePrintFinish(saved.finish),
+          condition: String(saved.condition || "").trim(),
+          altered: Boolean(saved.altered),
+          signed: Boolean(saved.signed),
+          misprint: Boolean(saved.misprint),
           requestedName: String(saved.requestedName || name),
           name,
           imageUri,
@@ -6045,6 +6306,17 @@
           id: `missing-${crypto.randomUUID()}`,
           requestedName: name,
           name,
+          scryfallId: "",
+          oracleId: "",
+          setCode: "",
+          setName: "",
+          collectorNumber: "",
+          language: "",
+          finish: "",
+          condition: "",
+          altered: false,
+          signed: false,
+          misprint: false,
           imageUri: "",
           sourceImageUri: "",
           imageData: "",
@@ -6089,6 +6361,15 @@
         return {
           id: card.id,
           scryfallId: card.scryfallId || "",
+          setCode: String(card.setCode || "").trim().toLowerCase(),
+          setName: String(card.setName || "").trim(),
+          collectorNumber: String(card.collectorNumber || "").trim(),
+          language: String(card.language || "").trim().toLowerCase(),
+          finish: normalizePrintFinish(card.finish),
+          condition: String(card.condition || "").trim(),
+          altered: Boolean(card.altered),
+          signed: Boolean(card.signed),
+          misprint: Boolean(card.misprint),
           requestedName: card.requestedName,
           name: card.name,
           imageUri: card.sourceImageUri || (card.imageUri && !card.imageUri.startsWith("data:") ? card.imageUri : ""),
@@ -10213,11 +10494,12 @@
       }
 
       async function addCardsByName(name, quantity = 1, recordHistory = true) {
-        const cleanName = cleanDeckLine(name || "");
-        if (!cleanName) {
-          setStatus("No card", "Enter a card name or Scryfall ID to add.");
+        const entry = parseDecklistLine(name || "");
+        if (!entry) {
+          setStatus("No card", "Enter a card name, exact printing, or Scryfall ID to add.");
           return null;
         }
+        const cleanName = entry.name;
         const count = normalizeAddCardQuantity(quantity);
 
         clearCardPreview();
@@ -10230,14 +10512,14 @@
 
         let template;
         try {
-          template = await fetchCardByNameOrId(cleanName, signal);
+          template = await fetchCardByDeckEntry(entry, signal);
         } catch (error) {
           if (signal.aborted) {
             setLoading(false);
             setStatus("Stopped", `${cleanName} was not added.`);
             return null;
           }
-          template = createPlaceholderCard(cleanName, error.message);
+          template = applyPrintingMetadata(createPlaceholderCard(cleanName, error.message), entry);
         }
 
         if (signal.aborted) {
@@ -10287,15 +10569,15 @@
       }
 
       function submitAddCardModal() {
-        const name = cleanDeckLine(addCardNameInput.value || "");
-        if (!name) {
-          setStatus("No card", "Enter a card name or Scryfall ID to add.");
+        const input = addCardNameInput.value || "";
+        if (!parseDecklistLine(input)) {
+          setStatus("No card", "Enter a card name, exact printing, or Scryfall ID to add.");
           addCardNameInput.focus();
           return;
         }
         const quantity = normalizeAddCardQuantity(addCardQuantityInput.value);
         closeAddCardModal();
-        addCardsByName(name, quantity);
+        addCardsByName(input, quantity);
       }
 
       function promptAddCard() {
@@ -10377,14 +10659,15 @@
           let template;
           const raw = entry.scryfallId ? exactPrintsById.get(entry.scryfallId) : null;
           if (raw) {
-            template = normalizeScryfallCard(raw, entry.name);
+            template = applyPrintingMetadata(normalizeScryfallCard(raw, entry.name), entry);
             exactPrintCount += entry.count;
           } else {
             try {
-              template = await fetchCardByName(entry.name, signal);
+              template = await fetchCardByDeckEntry({ ...entry, scryfallId: "" }, signal);
+              if (entry.setCode && entry.collectorNumber) exactPrintCount += entry.count;
             } catch (error) {
               if (signal.aborted) break;
-              template = createPlaceholderCard(entry.name, error.message);
+              template = applyPrintingMetadata(createPlaceholderCard(entry.name, error.message), entry);
             }
           }
 
@@ -10443,7 +10726,7 @@
       }
 
       async function loadDeck() {
-        const entries = parseDecklistEntries(decklistInput.value);
+        const entries = preserveExistingPrintingMetadata(parseDecklistEntries(decklistInput.value), state.cards);
         const totalCards = entries.reduce((total, entry) => total + entry.count, 0);
         if (!totalCards) {
           setStatus("No cards", "Paste a decklist first.", 0);
@@ -10468,10 +10751,10 @@
 
           let template;
           try {
-            template = await fetchCardByName(entry.name, state.abortController.signal);
+            template = await fetchCardByDeckEntry(entry, state.abortController.signal);
           } catch (error) {
             if (state.abortController.signal.aborted) break;
-            template = createPlaceholderCard(entry.name, error.message);
+            template = applyPrintingMetadata(createPlaceholderCard(entry.name, error.message), entry);
           }
 
           for (let copyIndex = 0; copyIndex < entry.count; copyIndex++) {
@@ -10833,6 +11116,16 @@
         setStrategyNotes(cards.strategyNotes || "");
         state.cards = cards.map((card, index) => ({
           id: card.id || `test-${index}`,
+          scryfallId: String(card.scryfallId || ""),
+          setCode: String(card.setCode || card.set || "").trim().toLowerCase(),
+          setName: String(card.setName || card.set_name || "").trim(),
+          collectorNumber: String(card.collectorNumber || card.collector_number || "").trim(),
+          language: String(card.language || card.lang || "").trim().toLowerCase(),
+          finish: normalizePrintFinish(card.finish),
+          condition: String(card.condition || "").trim(),
+          altered: Boolean(card.altered),
+          signed: Boolean(card.signed),
+          misprint: Boolean(card.misprint),
           requestedName: card.name,
           name: card.name,
           imageUri: card.imageUri || card.faces?.[0]?.imageUri || "",
@@ -10912,6 +11205,7 @@
         window.mtgViewer = {
           parseDecklist,
           parseDecklistEntries,
+          cardDeckSpecifier,
           parseMythicToolsCsv,
           importMythicToolsCsvText,
           cleanDeckLine,
