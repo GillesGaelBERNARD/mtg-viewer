@@ -1,5 +1,8 @@
 .DS_Store
 Thumbs.db
 *.log
+__pycache__/
+*.py[cod]
+.ruff_cache/
 all_my_mtg_viewer_decks/
 scratch/

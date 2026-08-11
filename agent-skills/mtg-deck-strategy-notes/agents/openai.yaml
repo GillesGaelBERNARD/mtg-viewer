@@ -1,0 +1,7 @@
+interface:
+  display_name: "MTG Deck Strategy Notes"
+  short_description: "Create grounded MTG deck strategy notes"
+  default_prompt: "Use $mtg-deck-strategy-notes to create strategy notes for this mtg-viewer deck."
+
+policy:
+  allow_implicit_invocation: false
