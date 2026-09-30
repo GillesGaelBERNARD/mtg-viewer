@@ -10,11 +10,17 @@ SKILL_ROOT = Path(__file__).resolve().parents[1]
 CLI = SKILL_ROOT / "scripts" / "deck_evidence.py"
 
 
-def write_save(path: Path, *, title: str = "Test Deck", cards: list[dict] | None = None) -> None:
+def write_save(
+    path: Path,
+    *,
+    title: str = "Test Deck",
+    cards: list[dict] | None = None,
+    version: int = 4,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "app": "mtg-table-viewer",
-        "version": 3,
+        "version": version,
         "deckTitle": title,
         "strategyNotes": "",
         "customBuckets": [],
@@ -114,7 +120,7 @@ class DeckEvidenceCliTests(unittest.TestCase):
             second = root / "Deck B" / "b.json"
             excluded = root / "others" / "hidden.json"
             write_save(first)
-            write_save(second)
+            write_save(second, version=3)
             write_save(excluded)
             (root / "not-a-save.json").write_text('{"summary": true}', encoding="utf-8")
             manifest = root / "jobs.json"

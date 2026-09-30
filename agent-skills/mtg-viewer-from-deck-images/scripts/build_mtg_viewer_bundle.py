@@ -29,7 +29,7 @@ BASIC_NAMES = {
 }
 LAST_REQUEST_AT = 0.0
 MIN_REQUEST_INTERVAL = 0.16
-SAVE_VERSION = 3
+SAVE_VERSION = 4
 MANA_COLORS = ("W", "U", "B", "R", "G")
 PRODUCED_MANA_SYMBOLS = (*MANA_COLORS, "C")
 MANA_COLOR_LABELS = {
@@ -445,9 +445,19 @@ def viewer_card(card_id, requested, canonical, chosen, order, embed_images):
     image_data = active_face.get("imageData") or image_data_for(image_uri, embed_images)
     type_line = canonical.get("type_line") or chosen.get("type_line") or ""
     buckets = auto_bucket_ids(canonical, chosen)
+    available_finishes = [str(value or "").strip().lower() for value in chosen.get("finishes") or [] if value]
     return {
         "id": f"card-{order:03d}-{card_id}",
         "scryfallId": chosen.get("id") or canonical.get("id") or "",
+        "setCode": chosen.get("set") or canonical.get("set") or "",
+        "setName": chosen.get("set_name") or canonical.get("set_name") or "",
+        "collectorNumber": chosen.get("collector_number") or canonical.get("collector_number") or "",
+        "language": chosen.get("lang") or canonical.get("lang") or "",
+        "finish": available_finishes[0] if len(available_finishes) == 1 else "",
+        "condition": "",
+        "altered": False,
+        "signed": False,
+        "misprint": False,
         "requestedName": requested_name,
         "name": card_name,
         "imageUri": image_uri,

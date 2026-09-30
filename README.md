@@ -7,11 +7,11 @@ A zero-install, single-file HTML/CSS/JS application for organizing Magic: The Ga
 ## Features
 
 - **Interactive Tabletop**: Drag and arrange cards across custom categories, land mana stacks, and utility buckets.
-- **Scryfall Integration**: Automatically resolves card text, type lines, mana costs, color identity, and card faces via Scryfall API.
+- **Scryfall Integration**: Resolves card text and exact printings via Scryfall IDs or `(SET) collector-number`, including printed-language images when specified.
 - **Offline Mode**: Supports embedding card images directly into `.mtg-viewer.json` save files.
 - **Granular Auto-Buckets**: Deterministically classifies card abilities into leaf categories (e.g. `damage/deal/creature`, `tokens/create/spirit`, `lands/react-to/enter-land`).
 - **Strategy & Notes**: Attach piloting notes and generate deck strategy guides in Markdown.
-- **Moxfield Export**: Export decks directly to Moxfield format.
+- **Moxfield Export**: Export exact set/collector printings and foil/etched markers in Moxfield format.
 
 ## Usage
 
@@ -21,6 +21,9 @@ Simply open `mtg-viewer.html` in any web browser.
 
 - Click **Open Deck File** to load an `.mtg-viewer.json` save file.
 - Click **Save Deck File** to download or save your deck state.
+- **Add Card** and **Load Cards** accept card names, plain Scryfall UUIDs, and Moxfield print syntax such as `1 Sol Ring (CMM) 410 *F*`.
+- Viewer-generated decklist lines stay readable in Moxfield notation. The parser also accepts optional `| id=… | lang=… | finish=…` metadata, while JSON saves retain the complete Scryfall ID, language, finish, condition, altered, signed, and misprint fields invisibly.
+- MythicTools CSV imports prefer Scryfall ID, then set + collector number + language, and only fall back to a name when no printing identifier is available.
 
 ### Strategy Notes
 
@@ -46,15 +49,15 @@ Card data and images are loaded from the public Scryfall API. Magic: The Gatheri
 
 The repo includes specialized AI agent skills under `agent-skills/`:
 
-1. **mtg-viewer-from-deck-images** (`agent-skills/mtg-viewer-from-deck-images/`):
+1. **mtg-deck-strategy-notes** (`agent-skills/mtg-deck-strategy-notes/`) — the recommended flagship skill:
+   - Generates grounded Markdown strategy notes from compact current-format deck statistics and bounded card queries, using a fresh isolated Codex context for every deck without exposing the full save JSON to the LLM.
+
+2. **mtg-viewer-from-deck-images** (`agent-skills/mtg-viewer-from-deck-images/`):
    - Guides an AI agent through creating `.mtg-viewer.json` saves from physical deck photos, including accent-preserving localized titles, language-preserving Scryfall images, duplicate audits, offline image embedding, multi-face card images, strategy note fields, actual/alternate commander fields, land produced-mana grouping, and utility bucket compatibility.
    - *Warning: this skill consumes a large amount of tokens. You might rather use specialised scanning tools instead, such as the scan feature from MythicTools (mtg-viewer compatible).*
 
-2. **mtg-viewer-to-moxfield** (`agent-skills/mtg-viewer-to-moxfield/`):
-   - Converts `.mtg-viewer.json` saved decks into paste-ready Moxfield decklists while preserving commander designations (`isCommander`) and card quantities.
-
-3. **mtg-deck-strategy-notes** (`agent-skills/mtg-deck-strategy-notes/`):
-   - Generates grounded Markdown strategy notes from compact current-format deck statistics and bounded card queries, using a fresh isolated Codex context for every deck without exposing the full save JSON to the LLM.
+3. **mtg-viewer-to-moxfield** (`agent-skills/mtg-viewer-to-moxfield/`):
+   - Converts `.mtg-viewer.json` saved decks into paste-ready Moxfield decklists while preserving commander designations, quantities, set/collector printings, and foil/etched finishes. Legacy saves are enriched from their Scryfall IDs when online.
 
 ![Loaded table overview](screenshots/from_cards_pic_to_digital_deck.png)
 

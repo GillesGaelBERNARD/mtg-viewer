@@ -16,7 +16,8 @@ from typing import Any, Iterable
 
 
 APP_ID = "mtg-table-viewer"
-CURRENT_SAVE_VERSION = 3
+CURRENT_SAVE_VERSION = 4
+SUPPORTED_SAVE_VERSIONS = frozenset({3, CURRENT_SAVE_VERSION})
 EXCLUDED_DIRECTORY_NAMES = {"other", "others"}
 VISIBLE_AGGREGATE_SCHEMA = "mtg-deck-strategy-evidence/1"
 SESSION_SCHEMA = "mtg-deck-strategy-session/1"
@@ -122,7 +123,11 @@ def load_current_save(path: Path) -> dict[str, Any]:
             payload = json.load(source)
     except (OSError, json.JSONDecodeError) as error:
         raise EvidenceError(f"Cannot read mtg-viewer save: {path}") from error
-    if not isinstance(payload, dict) or payload.get("app") != APP_ID or payload.get("version") != CURRENT_SAVE_VERSION:
+    if (
+        not isinstance(payload, dict)
+        or payload.get("app") != APP_ID
+        or payload.get("version") not in SUPPORTED_SAVE_VERSIONS
+    ):
         raise EvidenceError(f"Not a current mtg-viewer save: {path}")
     if not isinstance(payload.get("cards"), list):
         raise EvidenceError(f"Current mtg-viewer save has no cards array: {path}")
